@@ -7,7 +7,6 @@ module.exports = {
     google: {
         aiKey: 'AIzaSyDhmCzfIJ7YbUpl1m0uIvHuEvt2yf-FC6A' // Kunci API Gemini
     },
-    
     // Bot Settings
     bot: {
         name: "Gemini AI Bot",

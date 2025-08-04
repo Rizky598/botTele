@@ -1,13 +1,35 @@
-const TelegramBot = require("node-telegram-bot-api");
-const fs = require("fs");
-const path = require("path");
-const axios = require("axios");
-const config = require("./config");
+import TelegramBot from 'node-telegram-bot-api';
+import fs from 'fs';
+import path from 'path';
+import axios from 'axios';
+import winston from 'winston';
+import { fileURLToPath } from 'url';
+import moment from 'moment';
+import config from './config.js';
 
 // ======================== INISIALISASI ========================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Konfigurasi logger
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.printf(({ timestamp, level, message }) => {
+            return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+        })
+    ),
+    transports: [
+        new winston.transports.Console(),
+        new winston.transports.File({ filename: path.join(__dirname, 'logs', 'combined.log') }),
+        new winston.transports.File({ filename: path.join(__dirname, 'logs', 'error.log'), level: 'error' })
+    ]
+});
+
 const conversationHistory = {};
-const MEMORY_FILE = path.join(__dirname, "otak.json");
-const USER_CACHE_FILE = path.join(__dirname, "user_cache.json");
+const MEMORY_FILE = path.join(__dirname, 'otak.json');
+const USER_CACHE_FILE = path.join(__dirname, 'user_cache.json');
 let userCache = new Set();
 
 // Konfigurasi dari file
@@ -23,7 +45,7 @@ const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 function loadConversationHistory() {
     if (fs.existsSync(MEMORY_FILE)) {
         try {
-            const data = fs.readFileSync(MEMORY_FILE, "utf8");
+            const data = fs.readFileSync(MEMORY_FILE, 'utf8');
             const parsedData = JSON.parse(data);
             
             for (const chatId in parsedData) {
@@ -34,9 +56,9 @@ function loadConversationHistory() {
                         timestamp: msg.timestamp || Date.now()
                     }));
             }
-            console.log("🧠 Memori percakapan berhasil dimuat");
+            logger.info('Memori percakapan berhasil dimuat');
         } catch (error) {
-            console.error("❌ Error memuat memori:", error);
+            logger.error(`Error memuat memori: ${error.message}`);
             // Backup file corrupt
             fs.renameSync(MEMORY_FILE, `${MEMORY_FILE}.corrupted-${Date.now()}`);
         }
@@ -51,29 +73,29 @@ function saveConversationHistory() {
                 msg => msg.role && msg.content
             );
         }
-        fs.writeFileSync(MEMORY_FILE, JSON.stringify(validData, null, 2), "utf8");
+        fs.writeFileSync(MEMORY_FILE, JSON.stringify(validData, null, 2), 'utf8');
     } catch (error) {
-        console.error("❌ Error menyimpan memori:", error);
+        logger.error(`Error menyimpan memori: ${error.message}`);
     }
 }
 
 function loadUserCache() {
     if (fs.existsSync(USER_CACHE_FILE)) {
         try {
-            const data = fs.readFileSync(USER_CACHE_FILE, "utf8");
+            const data = fs.readFileSync(USER_CACHE_FILE, 'utf8');
             userCache = new Set(JSON.parse(data));
-            console.log("👤 Cache pengguna berhasil dimuat");
+            logger.info('Cache pengguna berhasil dimuat');
         } catch (error) {
-            console.error("❌ Error memuat cache pengguna:", error);
+            logger.error(`Error memuat cache pengguna: ${error.message}`);
         }
     }
 }
 
 function saveUserCache() {
     try {
-        fs.writeFileSync(USER_CACHE_FILE, JSON.stringify([...userCache]), "utf8");
+        fs.writeFileSync(USER_CACHE_FILE, JSON.stringify([...userCache]), 'utf8');
     } catch (error) {
-        console.error("❌ Error menyimpan cache pengguna:", error);
+        logger.error(`Error menyimpan cache pengguna: ${error.message}`);
     }
 }
 
@@ -109,7 +131,7 @@ async function getAIResponse(chatId, message) {
             const personality = BOT_CONFIG.personalities[BOT_CONFIG.defaultPersonality];
             if (personality) {
                 conversationHistory[chatId].push({
-                    role: "system",
+                    role: 'system',
                     content: personality.systemMessage,
                     timestamp: Date.now()
                 });
@@ -119,7 +141,7 @@ async function getAIResponse(chatId, message) {
     
     // Tambahkan pesan user
     conversationHistory[chatId].push({ 
-        role: "user", 
+        role: 'user', 
         content: message, 
         timestamp: Date.now() 
     });
@@ -127,7 +149,7 @@ async function getAIResponse(chatId, message) {
     try {
         const relevantMessages = getRelevantConversationContext(chatId);
         const formattedMessages = relevantMessages.map(msg => ({
-            role: msg.role === "user" ? "user" : "model",
+            role: msg.role === 'user' ? 'user' : 'model',
             parts: [{ text: msg.content }]
         }));
         
@@ -141,7 +163,7 @@ async function getAIResponse(chatId, message) {
         
         // Tambahkan respon AI
         conversationHistory[chatId].push({ 
-            role: "assistant", 
+            role: 'assistant', 
             content: aiResponse, 
             timestamp: Date.now() 
         });
@@ -151,7 +173,7 @@ async function getAIResponse(chatId, message) {
         
         return aiResponse;
     } catch (error) {
-        console.error("❌ Error AI:", error.response?.data || error.message);
+        logger.error(`Error AI: ${error.response?.data || error.message}`);
         
         // Hapus pesan user yang gagal diproses
         conversationHistory[chatId].pop();
@@ -165,28 +187,28 @@ async function notifyAdmin(message) {
     try {
         await bot.sendMessage(ADMIN_ID, `🔔 ADMIN NOTIFIKASI:\n${message}`);
     } catch (error) {
-        console.error("❌ Gagal mengirim notifikasi admin:", error);
+        logger.error(`Gagal mengirim notifikasi admin: ${error.message}`);
     }
 }
 
 function formatMessage(text, context = {}) {
     return text
-        .replace(/{name}/g, context.name || "Pengguna")
-        .replace(/{botName}/g, BOT_CONFIG.name || "Bot AI")
-        .replace(/{userId}/g, context.userId || "N/A");
+        .replace(/{name}/g, context.name || 'Pengguna')
+        .replace(/{botName}/g, BOT_CONFIG.name || 'Bot AI')
+        .replace(/{userId}/g, context.userId || 'N/A');
 }
 
 // ======================== HANDLER PESAN UTAMA ========================
-bot.on("message", async (msg) => {
+bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const messageText = msg.text;
     const userId = msg.from.id;
-    const userName = msg.from.first_name || "Pengguna";
+    const userName = msg.from.first_name || 'Pengguna';
     
     // Abaikan command dan pesan kosong
-    if (!messageText || messageText.startsWith("/")) return;
+    if (!messageText || messageText.startsWith('/')) return;
     
-    console.log(`📩 [${userName} (${userId})]: ${messageText}`);
+    logger.info(`Pesan dari [${userName} (${userId})]: ${messageText}`);
     
     // Deteksi user baru
     if (userId != ADMIN_ID && !userCache.has(userId)) {
@@ -196,12 +218,12 @@ bot.on("message", async (msg) => {
     }
     
     try {
-        await bot.sendChatAction(chatId, "typing");
+        await bot.sendChatAction(chatId, 'typing');
         const aiResponse = await getAIResponse(chatId, messageText);
         await bot.sendMessage(chatId, aiResponse);
-        console.log(`💬 Respons untuk [${userName}]: ${aiResponse.substring(0, 50)}...`);
+        logger.info(`Respons untuk [${userName}]: ${aiResponse.substring(0, 50)}...`);
     } catch (error) {
-        console.error("❌ Error memproses pesan:", error);
+        logger.error(`Error memproses pesan: ${error.message}`);
         await bot.sendMessage(chatId, BOT_CONFIG.errorMessages.general);
     }
 });
@@ -210,7 +232,7 @@ bot.on("message", async (msg) => {
 const commandHandlers = {
     start: async (msg) => {
         const chatId = msg.chat.id;
-        const userName = msg.from.first_name || "Pengguna";
+        const userName = msg.from.first_name || 'Pengguna';
         const userId = msg.from.id;
         
         const welcomeMessage = formatMessage(BOT_CONFIG.welcomeMessage, {
@@ -218,8 +240,8 @@ const commandHandlers = {
             userId: userId
         });
         
-        await bot.sendMessage(chatId, welcomeMessage, { parse_mode: "Markdown" });
-        console.log(`👋 [${userName}] memulai bot`);
+        await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+        logger.info(`[${userName}] memulai bot`);
         
         if (userId != ADMIN_ID) {
             await notifyAdmin(`${userName} (${userId}) memulai bot`);
@@ -230,7 +252,7 @@ const commandHandlers = {
         bot.sendMessage(
             msg.chat.id, 
             formatMessage(BOT_CONFIG.helpMessage), 
-            { parse_mode: "Markdown" }
+            { parse_mode: 'Markdown' }
         );
     },
     
@@ -248,15 +270,15 @@ const commandHandlers = {
 • ⚙️ Versi: ${BOT_CONFIG.version}
         `.trim();
         
-        await bot.sendMessage(chatId, statsMessage, { parse_mode: "Markdown" });
+        await bot.sendMessage(chatId, statsMessage, { parse_mode: 'Markdown' });
     },
     
     clear: async (msg) => {
         const chatId = msg.chat.id;
         conversationHistory[chatId] = [];
         saveConversationHistory();
-        await bot.sendMessage(chatId, "🧹 Memori percakapan berhasil dihapus!");
-        console.log(`🗑️ [${chatId}] hapus memori`);
+        await bot.sendMessage(chatId, '🧹 Memori percakapan berhasil dihapus!');
+        logger.info(`[${chatId}] hapus memori`);
     },
     
     pin: async (msg, match) => {
@@ -267,12 +289,12 @@ const commandHandlers = {
             return bot.sendMessage(
                 chatId, 
                 formatMessage(BOT_CONFIG.errorMessages.invalidQuery), 
-                { parse_mode: "Markdown" }
+                { parse_mode: 'Markdown' }
             );
         }
         
         try {
-            await bot.sendChatAction(chatId, "upload_photo");
+            await bot.sendChatAction(chatId, 'upload_photo');
             const response = await axios.get(
                 `https://api.vreden.my.id/api/pinterest?query=${encodeURIComponent(query)}`,
                 { timeout: 10000 }
@@ -282,13 +304,13 @@ const commandHandlers = {
             if (imageUrls.length > 0) {
                 await bot.sendPhoto(chatId, imageUrls[0], { 
                     caption: `📌 Hasil untuk: *${query}*`,
-                    parse_mode: "Markdown"
+                    parse_mode: 'Markdown'
                 });
             } else {
                 await bot.sendMessage(chatId, `❌ Tidak ditemukan gambar untuk "${query}"`);
             }
         } catch (error) {
-            console.error("❌ Pinterest error:", error);
+            logger.error(`Pinterest error: ${error.message}`);
             await bot.sendMessage(chatId, BOT_CONFIG.errorMessages.apiFailure);
         }
     },
@@ -300,16 +322,16 @@ const commandHandlers = {
         ];
         
         await bot.sendPhoto(chatId, randomImage, {
-            caption: "⚙️ *PANEL KONTROL BOT*",
-            parse_mode: "Markdown",
+            caption: '⚙️ *PANEL KONTROL BOT*',
+            parse_mode: 'Markdown',
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: "✨ Atur Kepribadian", callback_data: "set_personality" },
-                        { text: "🔄 Reset Percakapan", callback_data: "reset_conversation" }
+                        { text: '✨ Atur Kepribadian', callback_data: 'set_personality' },
+                        { text: '🔄 Reset Percakapan', callback_data: 'reset_conversation' }
                     ],
                     [
-                        { text: "ℹ️ Info Bot", callback_data: "bot_info" }
+                        { text: 'ℹ️ Info Bot', callback_data: 'bot_info' }
                     ]
                 ]
             }
@@ -323,13 +345,13 @@ const commandHandlers = {
         if (!query) {
             return bot.sendMessage(
                 chatId, 
-                "🎵 Berikan judul lagu!\nContoh: `/play DJ malam pagi slowed`", 
-                { parse_mode: "Markdown" }
+                '🎵 Berikan judul lagu!\nContoh: `/play DJ malam pagi slowed`', 
+                { parse_mode: 'Markdown' }
             );
         }
         
         try {
-            await bot.sendChatAction(chatId, "typing");
+            await bot.sendChatAction(chatId, 'typing');
             const response = await axios.get(
                 `https://api.vreden.my.id/api/ytplaymp3?query=${encodeURIComponent(query)}`,
                 { timeout: 15000 }
@@ -337,25 +359,25 @@ const commandHandlers = {
             
             const result = response.data?.result;
             if (!result?.metadata) {
-                throw new Error("Data tidak valid");
+                throw new Error('Data tidak valid');
             }
             
             const { title, url, image } = result.metadata;
             await bot.sendPhoto(chatId, image, {
                 caption: `🎶 *${title}*\n🔗 [Tonton di YouTube](${url})`,
-                parse_mode: "Markdown",
+                parse_mode: 'Markdown',
                 reply_markup: {
                     inline_keyboard: [[
                         { 
-                            text: "⬇️ Unduh MP3", 
+                            text: '⬇️ Unduh MP3', 
                             callback_data: `download_mp3_${encodeURIComponent(url)}`
                         }
                     ]]
                 }
             });
         } catch (error) {
-            console.error("❌ Play error:", error);
-            await bot.sendMessage(chatId, "🚫 Lagu tidak ditemukan atau server error");
+            logger.error(`Play error: ${error.message}`);
+            await bot.sendMessage(chatId, '🚫 Lagu tidak ditemukan atau server error');
         }
     }
 };
@@ -370,19 +392,19 @@ bot.onText(/\/bot/, commandHandlers.bot);
 bot.onText(/\/play(?: (.+))?/, commandHandlers.play);
 
 // ======================== HANDLER CALLBACK ========================
-bot.on("callback_query", async (callbackQuery) => {
+bot.on('callback_query', async (callbackQuery) => {
     const { message, data } = callbackQuery;
     const chatId = message.chat.id;
     
     await bot.answerCallbackQuery(callbackQuery.id);
 
     try {
-        if (data === "reset_conversation") {
+        if (data === 'reset_conversation') {
             conversationHistory[chatId] = [];
             saveConversationHistory();
-            await bot.sendMessage(chatId, "🧹 Memori percakapan direset!");
+            await bot.sendMessage(chatId, '🧹 Memori percakapan direset!');
         }
-        else if (data === "set_personality") {
+        else if (data === 'set_personality') {
             const keyboard = [];
             
             // Buat tombol untuk setiap kepribadian
@@ -393,7 +415,7 @@ bot.on("callback_query", async (callbackQuery) => {
                 }]);
             }
             
-            keyboard.push([{ text: "🔙 Kembali", callback_data: "back_to_main" }]);
+            keyboard.push([{ text: '🔙 Kembali', callback_data: 'back_to_main' }]);
             
             await bot.editMessageReplyMarkup({
                 inline_keyboard: keyboard
@@ -402,14 +424,14 @@ bot.on("callback_query", async (callbackQuery) => {
                 message_id: message.message_id
             });
         }
-        else if (data.startsWith("set_personality_")) {
-            const personalityKey = data.split("_")[2];
+        else if (data.startsWith('set_personality_')) {
+            const personalityKey = data.split('_')[2];
             const personality = BOT_CONFIG.personalities[personalityKey];
             
             if (personality) {
                 // Set kepribadian baru sebagai system message
                 conversationHistory[chatId] = [{
-                    role: "system",
+                    role: 'system',
                     content: personality.systemMessage,
                     timestamp: Date.now()
                 }];
@@ -419,19 +441,19 @@ bot.on("callback_query", async (callbackQuery) => {
                 await bot.sendMessage(
                     chatId, 
                     `🎭 *Kepribadian Diatur:* ${personality.name}\n\n${personality.description}`,
-                    { parse_mode: "Markdown" }
+                    { parse_mode: 'Markdown' }
                 );
             }
         }
-        else if (data === "back_to_main") {
+        else if (data === 'back_to_main') {
             await bot.editMessageReplyMarkup({
                 inline_keyboard: [
                     [
-                        { text: "✨ Atur Kepribadian", callback_data: "set_personality" },
-                        { text: "🔄 Reset Percakapan", callback_data: "reset_conversation" }
+                        { text: '✨ Atur Kepribadian', callback_data: 'set_personality' },
+                        { text: '🔄 Reset Percakapan', callback_data: 'reset_conversation' }
                     ],
                     [
-                        { text: "ℹ️ Info Bot", callback_data: "bot_info" }
+                        { text: 'ℹ️ Info Bot', callback_data: 'bot_info' }
                     ]
                 ]
             }, {
@@ -439,7 +461,7 @@ bot.on("callback_query", async (callbackQuery) => {
                 message_id: message.message_id
             });
         }
-        else if (data === "bot_info") {
+        else if (data === 'bot_info') {
             const infoMessage = `
 🤖 *${BOT_CONFIG.name}*
 ${BOT_CONFIG.description}
@@ -457,11 +479,11 @@ ${BOT_CONFIG.description}
 - Multiple personalities
             `.trim();
             
-            await bot.sendMessage(chatId, infoMessage, { parse_mode: "Markdown" });
+            await bot.sendMessage(chatId, infoMessage, { parse_mode: 'Markdown' });
         }
-        else if (data.startsWith("download_mp3_")) {
-            const videoUrl = decodeURIComponent(data.replace("download_mp3_", ""));
-            await bot.sendChatAction(chatId, "upload_audio");
+        else if (data.startsWith('download_mp3_')) {
+            const videoUrl = decodeURIComponent(data.replace('download_mp3_', ''));
+            await bot.sendChatAction(chatId, 'upload_audio');
             
             const response = await axios.get(
                 `https://api.vreden.my.id/api/ytmp3?url=${encodeURIComponent(videoUrl)}`,
@@ -474,62 +496,82 @@ ${BOT_CONFIG.description}
                     chatId,
                     result.download.url,
                     {
-                        title: result.metadata?.title || "Audio",
-                        performer: "YouTube Downloader",
-                        caption: `🎵 ${result.metadata?.title || "Audio"}`,
-                        parse_mode: "Markdown"
+                        title: result.metadata?.title || 'Audio',
+                        performer: 'YouTube Downloader',
+                        caption: `🎵 ${result.metadata?.title || 'Audio'}`,
+                        parse_mode: 'Markdown'
                     }
                 );
             } else {
-                throw new Error("URL download tidak valid");
+                throw new Error('URL download tidak valid');
             }
         }
     } catch (error) {
-        console.error("❌ Callback error:", error);
-        await bot.sendMessage(chatId, "⚠️ Terjadi kesalahan saat memproses permintaan");
+        logger.error(`Callback error: ${error.message}`);
+        await bot.sendMessage(chatId, '⚠️ Terjadi kesalahan saat memproses permintaan');
     }
 });
 
 // ======================== MANAJEMEN PROSES ========================
-bot.on("error", error => console.error("❌ Bot error:", error));
-bot.on("polling_error", error => console.error("❌ Polling error:", error));
+bot.on('error', error => logger.error(`Bot error: ${error.message}`));
+bot.on('polling_error', error => logger.error(`Polling error: ${error.message}`));
 
 async function gracefulShutdown() {
-    console.log("\n🛑 Menghentikan bot...");
+    logger.info('🛑 Menghentikan bot...');
     saveConversationHistory();
     saveUserCache();
-    await notifyAdmin("🔴 Bot dimatikan!");
+    await notifyAdmin('🔴 Bot dimatikan!');
     process.exit(0);
 }
 
-process.on("SIGINT", gracefulShutdown);
-process.on("SIGTERM", gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
 
 // ======================== INISIALISASI BOT ========================
 (async () => {
     try {
+        // Buat folder logs jika belum ada
+        if (!fs.existsSync('logs')) {
+            fs.mkdirSync('logs');
+        }
+        
         // Load data
         loadConversationHistory();
         loadUserCache();
         
         // Verifikasi koneksi bot
         const botInfo = await bot.getMe();
-        console.log(`
+        logger.info(`
 🚀 Bot berhasil dijalankan!
 🤖 ${botInfo.first_name} (@${botInfo.username})
 📆 ${new Date().toLocaleString()}
         `.trim());
         
         await notifyAdmin(`🚀 Bot aktif! ${botInfo.first_name} siap melayani`);
+        
+        // Backup otomatis setiap 24 jam
+        setInterval(() => {
+            logger.info('⏰ Memulai backup terjadwal');
+            import('child_process').then(({ exec }) => {
+                exec('npm run backup', (error) => {
+                    if (error) {
+                        logger.error(`❌ Backup error: ${error.message}`);
+                        return;
+                    }
+                    logger.info('✅ Backup terjadwal berhasil');
+                });
+            });
+        }, 24 * 60 * 60 * 1000); // 24 jam
+        
+         // Backup data setiap 5 menit
+        setInterval(() => {
+            saveConversationHistory();
+            saveUserCache();
+            logger.info('💾 Backup data otomatis');
+        }, 5 * 60 * 1000); // 5 menit
     } catch (error) {
-        console.error("❌ Gagal memulai bot:", error);
+        logger.error(`Gagal memulai bot: ${error.message}`);
         process.exit(1);
     }
 })();
-
-// Backup data secara berkala
-setInterval(() => {
-    saveConversationHistory();
-    saveUserCache();
-    console.log("💾 Backup data otomatis");
-}, 300000); // Setiap 5 menit
+        

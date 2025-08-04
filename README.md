@@ -1,13 +1,10 @@
 # 🤖 Bot Telegram AI dengan Sistem Memori Percakapan
 
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+<center>
+<img src="https://files.catbox.moe/ta9ds2.gif" alt="Bot Demo" width="600">
+</center>
 
 Bot Telegram pintar dengan AI respons otomatis dan sistem memori percakapan yang ditingkatkan, dilengkapi fitur multimedia dan multi-kepribadian.
-
-<p align="center">
-  <img src="https://files.catbox.moe/ta9ds2.gif" alt="Demo Bot" width="600">
-</p>
 
 ## ✨ Fitur Utama
 
