@@ -4,8 +4,6 @@ module.exports = {
         token: '7943940179:AAHcd6jZ5Wt-jg9bxKU-YgQQbjlXRK6cqgU',
         adminId: 7693829809  // ID admin untuk notifikasi khusus
     },
-    
-    
     // Bot Settings
     bot: {
         systemMessage: `Kamu adalah asisten AI yang santai, humoris, dan suka melawak. Jawab pertanyaan dengan bahasa Indonesia yang natural, informatif, dan sisipkan lelucon atau gaya bahasa yang kocak. Jangan terlalu formal dan buat suasana percakapan jadi menyenangkan.`, // Default personality
@@ -15,7 +13,6 @@ module.exports = {
             kreatif_imajinatif: `Kamu adalah asisten AI yang kreatif dan imajinatif. Jawab pertanyaan dengan bahasa Indonesia yang unik, inovatif, dan penuh ide. Gunakan metafora, analogi, atau cerita untuk menjelaskan konsep.`
         },
         welcomeMessage: `Halo! 👋\n\nSaya adalah bot AI yang siap membantu Anda. Kirimkan pesan apa saja dan saya akan merespons menggunakan kecerdasan buatan.\n\nContoh yang bisa Anda tanyakan:\n• Pertanyaan umum\n• Minta bantuan menulis\n• Diskusi topik tertentu\n• Dan masih banyak lagi!\n\nSilakan mulai dengan mengirim pesan Anda. 😊`,
-        
         helpMessage: `🤖 Bantuan Bot AI\n\nCara menggunakan:\n• Kirim pesan apa saja dan saya akan merespons\n• Tidak perlu menggunakan command khusus\n• Bot akan otomatis membalas setiap pesan Anda\n\nCommand yang tersedia:\n/start - Memulai percakapan\n/help - Menampilkan bantuan ini\n/pin <query> - Mencari gambar dari Pinterest\n/clear - Menghapus memori percakapan\n/bot - Mengatur kepribadian bot dan mereset percakapan\n\nBot ini menggunakan AI untuk memberikan respons yang natural dan membantu. Silakan bertanya apa saja! 😊`,
         botImages: [
             "https://i.pinimg.com/736x/ad/da/22/adda223342ccd8396360bfe3a7923ab0.jpg",

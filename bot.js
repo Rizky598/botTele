@@ -1,11 +1,10 @@
 const TelegramBot = require("node-telegram-bot-api");
 const fs = require("fs");
 const path = require("path");
-const axios = require('axios');
-const config = require('./config');
+const axios = require("axios");
+const config = require("./config");
 
 // --- KONFIGURASI & INISIALISASI ---
-
 const conversationHistory = {};
 const MEMORY_FILE = path.join(__dirname, "otak.json");
 
@@ -18,13 +17,19 @@ const BLACKBOX_API_BASE = 'https://api.siputzx.my.id/api/ai/blackboxai';
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
 // --- MANAJEMEN MEMORI PERCAKAPAN ---
-
 // Muat riwayat percakapan dari file
 function loadConversationHistory() {
     if (fs.existsSync(MEMORY_FILE)) {
         try {
             const data = fs.readFileSync(MEMORY_FILE, "utf8");
-            Object.assign(conversationHistory, JSON.parse(data));
+            const parsedData = JSON.parse(data);
+            // Pastikan setiap pesan memiliki timestamp
+            for (const chatId in parsedData) {
+                conversationHistory[chatId] = parsedData[chatId].map(msg => ({
+                    ...msg,
+                    timestamp: msg.timestamp || Date.now() // Tambahkan timestamp jika belum ada
+                }));
+            }
             console.log("🧠 Memori percakapan berhasil dimuat.");
         } catch (error) {
             console.error("❌ Error memuat memori percakapan:", error);
@@ -42,33 +47,50 @@ function saveConversationHistory() {
     }
 }
 
-// --- FUNGSI UTAMA BOT ---
+// Fungsi untuk mendapatkan konteks percakapan yang relevan
+function getRelevantConversationContext(chatId, maxTokens = 900) {
+    if (!conversationHistory[chatId]) {
+        return [];
+    }
 
+    let currentTokens = 0;
+    const relevantMessages = [];
+    // Ambil pesan terbaru terlebih dahulu
+    for (let i = conversationHistory[chatId].length - 1; i >= 0; i--) {
+        const msg = conversationHistory[chatId][i];
+        const messageContent = `${msg.role}: ${msg.content}\n`;
+        const messageTokens = messageContent.length; // Estimasi token berdasarkan panjang karakter
+
+        if (currentTokens + messageTokens <= maxTokens) {
+            relevantMessages.unshift(msg); // Tambahkan ke depan array untuk menjaga urutan
+            currentTokens += messageTokens;
+        } else {
+            break; // Berhenti jika melebihi batas token
+        }
+    }
+    return relevantMessages;
+}
+
+// --- FUNGSI UTAMA BOT ---
 // Fungsi untuk memanggil AI API
 async function getAIResponse(chatId, message) {
     try {
         if (!conversationHistory[chatId]) {
             conversationHistory[chatId] = [];
         }
+        // Tambahkan pesan pengguna dengan timestamp
+        conversationHistory[chatId].push({ role: "user", content: message, timestamp: Date.now() });
 
-        conversationHistory[chatId].push({ role: "user", content: message });
-        const recentMessages = conversationHistory[chatId].slice(-5);
-        const formattedMessages = recentMessages.map(msg => `${msg.role}: ${msg.content}`).join("\n");
+        const relevantMessages = getRelevantConversationContext(chatId);
+        const formattedMessages = relevantMessages.map(msg => `${msg.role}: ${msg.content}`).join("\n");
+
         let fullMessage = `${config.bot.systemMessage}\n\n${formattedMessages}`;
-
-        if (fullMessage.length > 900) {
-            const lastMessage = conversationHistory[chatId].slice(-1);
-            const shortFormattedMessages = lastMessage.map(msg => `${msg.role}: ${msg.content}`).join("\n");
-            fullMessage = `${config.bot.systemMessage}\n\n${shortFormattedMessages}`;
-            if (fullMessage.length > 900) {
-                fullMessage = `${config.bot.systemMessage}\n\nuser: ${message}`;
-            }
-        }
 
         const response = await axios.get(`${BLACKBOX_API_BASE}?content=${encodeURIComponent(fullMessage)}`);
         const aiResponse = response.data.data;
 
-        conversationHistory[chatId].push({ role: "assistant", content: aiResponse });
+        // Tambahkan respons AI dengan timestamp
+        conversationHistory[chatId].push({ role: "assistant", content: aiResponse, timestamp: Date.now() });
         saveConversationHistory();
 
         return aiResponse;
@@ -83,20 +105,19 @@ async function notifyAdmin(message) {
     try {
         await bot.sendMessage(ADMIN_ID, `🔔 Admin Notification:\n${message}`);
     } catch (error) {
-        console.error('❌ Error mengirim notifikasi ke admin:', error.message);
+        console.error("❌ Error mengirim notifikasi ke admin:", error.message);
     }
 }
 
 // --- HANDLER PESAN & COMMAND ---
-
 // Handler untuk pesan masuk umum
-bot.on('message', async (msg) => {
+bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
     const messageText = msg.text;
-    const userName = msg.from.first_name || 'User';
+    const userName = msg.from.first_name || "User";
     const userId = msg.from.id;
 
-    if (!messageText || messageText.startsWith('/')) {
+    if (!messageText || messageText.startsWith("/")) {
         return;
     }
 
@@ -112,22 +133,22 @@ bot.on('message', async (msg) => {
     }
 
     try {
-        await bot.sendChatAction(chatId, 'typing');
+        await bot.sendChatAction(chatId, "typing");
         const aiResponse = await getAIResponse(chatId, messageText);
         await bot.sendMessage(chatId, aiResponse);
         console.log(`✅ Respons terkirim ke ${userName}: ${aiResponse.substring(0, 50)}...`);
     } catch (error) {
-        console.error('❌ Error saat memproses pesan:', error);
-        await bot.sendMessage(chatId, 'Maaf, terjadi kesalahan saat memproses pesan Anda.');
+        console.error("❌ Error saat memproses pesan:", error);
+        await bot.sendMessage(chatId, "Maaf, terjadi kesalahan saat memproses pesan Anda.");
     }
 });
 
 // Handler untuk command /start
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
-    const userName = msg.from.first_name || 'User';
+    const userName = msg.from.first_name || "User";
     const userId = msg.from.id;
-    const welcomeMessage = config.bot.welcomeMessage.replace('Halo!', `Halo ${userName}!`);
+    const welcomeMessage = config.bot.welcomeMessage.replace("Halo!", `Halo ${userName}!`);
 
     await bot.sendMessage(chatId, welcomeMessage);
     console.log(`👋 User: ${userName} (${chatId}) memulai bot`);
@@ -147,12 +168,10 @@ bot.onText(/\/help/, (msg) => {
 bot.onText(/\/stats/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
-
     if (userId !== ADMIN_ID) {
-        await bot.sendMessage(chatId, 'Anda tidak memiliki akses ke command ini.');
+        await bot.sendMessage(chatId, "Anda tidak memiliki akses ke command ini.");
         return;
     }
-
     const userCount = bot.userCache ? bot.userCache.size : 0;
     const statsMessage = `📊 Statistik Bot:\n👥 Total pengguna: ${userCount}\n🤖 Status: Aktif\n🔧 Admin ID: ${ADMIN_ID}`;
     await bot.sendMessage(chatId, statsMessage);
@@ -163,7 +182,7 @@ bot.onText(/\/clear/, async (msg) => {
     const chatId = msg.chat.id;
     conversationHistory[chatId] = [];
     saveConversationHistory();
-    await bot.sendMessage(chatId, 'Memori percakapan telah dihapus.');
+    await bot.sendMessage(chatId, "Memori percakapan telah dihapus.");
     console.log(`🗑️ Memori percakapan untuk chat ${chatId} telah dihapus.`);
 });
 
@@ -171,14 +190,12 @@ bot.onText(/\/clear/, async (msg) => {
 bot.onText(/\/pin(?: (.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const query = match[1];
-
     if (!query) {
-        await bot.sendMessage(chatId, 'Harap berikan query untuk mencari gambar Pinterest. Contoh: /pin kucing lucu');
+        await bot.sendMessage(chatId, "Harap berikan query untuk mencari gambar Pinterest. Contoh: /pin kucing lucu");
         return;
     }
-
     try {
-        await bot.sendChatAction(chatId, 'upload_photo');
+        await bot.sendChatAction(chatId, "upload_photo");
         const response = await axios.get(`https://api.vreden.my.id/api/pinterest?query=${encodeURIComponent(query)}`);
         const imageUrls = response.data.result;
 
@@ -188,8 +205,8 @@ bot.onText(/\/pin(?: (.+))?/, async (msg, match) => {
             await bot.sendMessage(chatId, `Tidak ditemukan gambar Pinterest untuk query: ${query}`);
         }
     } catch (error) {
-        console.error('❌ Error saat memanggil API Pinterest:', error.response?.data || error.message);
-        await bot.sendMessage(chatId, 'Maaf, terjadi kesalahan saat mencari gambar Pinterest.');
+        console.error("❌ Error saat memanggil API Pinterest:", error.response?.data || error.message);
+        await bot.sendMessage(chatId, "Maaf, terjadi kesalahan saat mencari gambar Pinterest.");
     }
 });
 
@@ -197,15 +214,14 @@ bot.onText(/\/pin(?: (.+))?/, async (msg, match) => {
 bot.onText(/\/bot/, async (msg) => {
     const chatId = msg.chat.id;
     const randomImage = config.bot.botImages[Math.floor(Math.random() * config.bot.botImages.length)];
-
     // Kirim foto dengan inline keyboard
     await bot.sendPhoto(chatId, randomImage, {
-        caption: 'Atur bot sesuai keinginanmu!',
+        caption: "Atur bot sesuai keinginanmu!",
         reply_markup: {
             inline_keyboard: [
                 [
-                    { text: '✨Atur Kepribadian', callback_data: 'set_personality' },
-                    { text: '🔄Reset Percakapan', callback_data: 'reset_conversation' }
+                    { text: "✨Atur Kepribadian", callback_data: "set_personality" },
+                    { text: "🔄Reset Percakapan", callback_data: "reset_conversation" }
                 ]
             ]
         }
@@ -213,7 +229,6 @@ bot.onText(/\/bot/, async (msg) => {
 });
 
 // --- HANDLER CALLBACK QUERY ---
-
 bot.on("callback_query", async (callbackQuery) => {
     const message = callbackQuery.message;
     const chatId = message.chat.id;
@@ -232,7 +247,7 @@ bot.on("callback_query", async (callbackQuery) => {
                 [{ text: "😎Santai & Humor", callback_data: "set_personality_santai_humor" }],
                 [{ text: "🧐Formal & Informatif", callback_data: "set_personality_formal_informatif" }],
                 [{ text: "🎨Kreatif & Imajinatif", callback_data: "set_personality_kreatif_imajinatif" }],
-                [{ text: 'Kembali', callback_data: 'back_to_main' }]
+                [{ text: "Kembali", callback_data: "back_to_main" }]
             ]
         }, {
             chat_id: chatId,
@@ -248,12 +263,12 @@ bot.on("callback_query", async (callbackQuery) => {
         } else {
             await bot.sendMessage(chatId, "Kepribadian tidak ditemukan.");
         }
-    } else if (data === 'back_to_main') {
+    } else if (data === "back_to_main") {
         await bot.editMessageReplyMarkup({
             inline_keyboard: [
                 [
-                    { text: '✨Atur Kepribadian', callback_data: 'set_personality' },
-                    { text: '🔄Reset Percakapan', callback_data: 'reset_conversation' }
+                    { text: "✨Atur Kepribadian", callback_data: "set_personality" },
+                    { text: "🔄Reset Percakapan", callback_data: "reset_conversation" }
                 ]
             ]
         }, {
@@ -264,32 +279,32 @@ bot.on("callback_query", async (callbackQuery) => {
 });
 
 // --- PENANGANAN ERROR & PROSES ---
-
-bot.on('error', (error) => console.error('❌ Bot error:', error));
-bot.on('polling_error', (error) => console.error('❌ Polling error:', error));
+bot.on("error", (error) => console.error("❌ Bot error:", error));
+bot.on("polling_error", (error) => console.error("❌ Polling error:", error));
 
 function gracefulShutdown() {
     saveConversationHistory();
-    console.log('\n🛑 Bot dihentikan...');
-    notifyAdmin('🛑 Bot telah dihentikan');
+    console.log("\n🛑 Bot dihentikan...");
+    notifyAdmin("🛑 Bot telah dihentikan");
     bot.stopPolling().then(() => process.exit(0));
 }
 
-process.on('SIGINT', gracefulShutdown);
-process.on('SIGTERM', gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
+process.on("SIGTERM", gracefulShutdown);
 
 // --- PROSES STARTUP ---
-
 (async () => {
     try {
         loadConversationHistory();
         const botInfo = await bot.getMe();
-        console.log('🤖 Bot Telegram AI sedang berjalan...');
+        console.log("🤖 Bot Telegram AI sedang berjalan...");
         console.log(`✅ Bot berhasil terhubung: @${botInfo.username}`);
-        console.log('📡 Menunggu pesan masuk...');
+        console.log("📡 Menunggu pesan masuk...");
         await notifyAdmin(`🚀 Bot ${botInfo.first_name} (@${botInfo.username}) telah aktif!`);
     } catch (error) {
-        console.error('❌ Error saat memulai bot:', error);
+        console.error("❌ Error saat memulai bot:", error);
         process.exit(1);
     }
 })();
+
+
