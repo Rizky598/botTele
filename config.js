@@ -1,4 +1,4 @@
-module.exports = {
+export default {
     // Telegram Bot Configuration
     telegram: {
         token: '7943940179:AAHcd6jZ5Wt-jg9bxKU-YgQQbjlXRK6cqgU',
