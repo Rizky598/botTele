@@ -1,37 +1,52 @@
 {
   "name": "telegram-ai-bot",
-  "version": "2.0.0",
-  "description": "Bot Telegram dengan AI respons otomatis dan sistem memori percakapan yang ditingkatkan",
+  "version": "3.0.0",
+  "description": "Bot Telegram AI canggih dengan sistem memori percakapan, multi-kepribadian, dan fitur multimedia",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
-    "dev": "nodemon bot.js",
+    "dev": "nodemon --watch . --ext js,json --delay 1 bot.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "install-deps": "npm install",
-    "setup": "npm install && echo \"Setup selesai! Jalankan 'npm start' untuk memulai bot.\""
+    "setup": "npm install && echo \"✅ Setup selesai! Jalankan 'npm run dev' untuk mode pengembangan atau 'npm start' untuk produksi.\"",
+    "backup": "node bot.js",
+    "lint": "eslint ."
   },
   "keywords": [
     "telegram",
     "bot", 
     "ai",
+    "gemini",
     "chatbot",
     "nodejs",
     "memory",
     "conversation",
-    "blackbox-ai"
+    "pinterest",
+    "youtube-downloader",
+    "multimedia-bot"
   ],
   "author": "Rizky",
   "license": "ISC",
   "dependencies": {
-    "axios": "^1.11.0",
-    "node-telegram-bot-api": "^0.66.0"
+    "axios": "^1.7.2",
+    "node-telegram-bot-api": "^0.70.0",
+    "winston": "^3.13.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.0"
+    "nodemon": "^3.1.0",
+    "eslint": "^9.4.0"
   },
   "engines": {
-    "node": ">=14.0.0",
-    "npm": ">=6.0.0"
-  }
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/username/repo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/username/repo/issues"
+  },
+  "homepage": "https://github.com/username/repo#readme"
 }
-
