@@ -1,7 +1,7 @@
 module.exports = {
     // Telegram Bot Configuration
     telegram: {
-        token: '8396236044:AAENTI6cW3h20j9lG1XTw_fpZZiVaSeX95Q',
+        token: '7943940179:AAHcd6jZ5Wt-jg9bxKU-YgQQbjlXRK6cqgU',
         adminId: 7693829809  // ID admin untuk notifikasi khusus
     },
     
