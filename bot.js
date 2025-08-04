@@ -11,7 +11,8 @@ const MEMORY_FILE = path.join(__dirname, "otak.json");
 // Ambil konfigurasi dari config.js
 const TELEGRAM_TOKEN = config.telegram.token;
 const ADMIN_ID = config.telegram.adminId;
-const BLACKBOX_API_BASE = 'https://api.siputzx.my.id/api/ai/blackboxai';
+const GOOGLE_AI_API_KEY = "AIzaSyDhmCzfIJ7YbUpl1m0uIvHuEvt2yf-FC6A";
+const GOOGLE_AI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent";
 
 // Inisialisasi bot
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
@@ -82,12 +83,25 @@ async function getAIResponse(chatId, message) {
         conversationHistory[chatId].push({ role: "user", content: message, timestamp: Date.now() });
 
         const relevantMessages = getRelevantConversationContext(chatId);
-        const formattedMessages = relevantMessages.map(msg => `${msg.role}: ${msg.content}`).join("\n");
+        const formattedMessages = relevantMessages.map(msg => ({
+            role: msg.role === "user" ? "user" : "model",
+            parts: [{ text: msg.content }]
+        }));
 
-        let fullMessage = `${config.bot.systemMessage}\n\n${formattedMessages}`;
+        const requestBody = {
+            contents: formattedMessages
+        };
 
-        const response = await axios.get(`${BLACKBOX_API_BASE}?content=${encodeURIComponent(fullMessage)}`);
-        const aiResponse = response.data.data;
+        const response = await axios.post(
+            `${GOOGLE_AI_API_URL}?key=${GOOGLE_AI_API_KEY}`,
+            requestBody,
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        const aiResponse = response.data.candidates[0].content.parts[0].text;
 
         // Tambahkan respons AI dengan timestamp
         conversationHistory[chatId].push({ role: "assistant", content: aiResponse, timestamp: Date.now() });
@@ -306,5 +320,79 @@ process.on("SIGTERM", gracefulShutdown);
         process.exit(1);
     }
 })();
+
+
+
+
+// Handler untuk command /play
+bot.onText(/\/play(?: (.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const query = match[1];
+    if (!query) {
+        await bot.sendMessage(chatId, "Harap berikan query untuk mencari musik YouTube. Contoh: /play DJ malam pagi slowed");
+        return;
+    }
+    try {
+        await bot.sendChatAction(chatId, "typing");
+        const response = await axios.get(`https://api.vreden.my.id/api/ytplaymp3?query=${encodeURIComponent(query)}`);
+        const result = response.data.result;
+
+        if (result && result.metadata) {
+            const videoTitle = result.metadata.title;
+            const videoUrl = result.metadata.url;
+            const thumbnailUrl = result.metadata.image;
+            const downloadUrl = `https://api.vreden.my.id/api/ytmp3?url=${encodeURIComponent(videoUrl)}`;
+
+            const message = `🎶 *${videoTitle}*\n\nURL: ${videoUrl}\n\nTekan tombol di bawah untuk mengunduh MP3.`;
+
+            await bot.sendPhoto(chatId, thumbnailUrl, {
+                caption: message,
+                parse_mode: "Markdown",
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: "Unduh MP3", callback_data: `download_mp3_${videoUrl}` }
+                        ]
+                    ]
+                }
+            });
+        } else {
+            await bot.sendMessage(chatId, `Tidak ditemukan musik YouTube untuk query: ${query}`);
+        }
+    } catch (error) {
+        console.error("❌ Error saat memanggil API YouTube Play MP3:", error.response?.data || error.message);
+        await bot.sendMessage(chatId, "Maaf, terjadi kesalahan saat mencari musik YouTube.");
+    }
+});
+
+
+
+
+    } else if (data.startsWith("download_mp3_")) {
+        const videoUrl = data.replace("download_mp3_", "");
+        try {
+            await bot.sendChatAction(chatId, "upload_audio");
+            const response = await axios.get(`https://api.vreden.my.id/api/ytmp3?url=${encodeURIComponent(videoUrl)}`);
+            const result = response.data.result;
+
+            if (result && result.download && result.download.url) {
+                const audioUrl = result.download.url;
+                const audioTitle = result.metadata.title || "Musik";
+                const audioFilename = result.download.filename || "audio.mp3";
+
+                await bot.sendAudio(chatId, audioUrl, {
+                    caption: `🎵 Berhasil mengunduh: *${audioTitle}*`,
+                    parse_mode: "Markdown",
+                    title: audioTitle,
+                    fileName: audioFilename
+                });
+            } else {
+                await bot.sendMessage(chatId, "Maaf, gagal mengunduh MP3. URL tidak valid atau tidak ditemukan.");
+            }
+        } catch (error) {
+            console.error("❌ Error saat mengunduh MP3:", error.response?.data || error.message);
+            await bot.sendMessage(chatId, "Maaf, terjadi kesalahan saat mengunduh MP3.");
+        }
+    }
 
 

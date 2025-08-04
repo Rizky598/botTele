@@ -1,54 +1,93 @@
-# Bot Telegram AI
+# Bot Telegram AI dengan Sistem Memori Percakapan
 
-Bot Telegram ini telah diperbarui dengan fitur baru dan peningkatan AI.
+Bot Telegram pintar dengan AI respons otomatis dan sistem memori percakapan yang ditingkatkan.
 
-## Fitur Baru
+## Fitur Utama
 
-### `/pin <query>`
-Fitur ini memungkinkan Anda mencari gambar dari Pinterest. Cukup ketik `/pin` diikuti dengan kata kunci pencarian Anda. Contoh:
+- 🤖 **AI Respons Otomatis** menggunakan BlackBox AI
+- 🧠 **Memori Percakapan Jangka Panjang** dengan timestamp
+- 🎭 **Kepribadian yang Dapat Diatur** (Santai & Humor, Formal & Informatif, Kreatif & Imajinatif)
+- 📌 **Pencarian Gambar Pinterest** dengan command `/pin`
+- 🗑️ **Reset Memori** dengan command `/clear`
+- 📊 **Statistik Bot** untuk admin
+- 🔔 **Notifikasi Admin** untuk user baru
 
-`/pin kucing lucu`
+## Instalasi dan Penggunaan
 
-Bot akan mengembalikan gambar Pinterest yang relevan dengan query Anda.
+### 1. Ekstrak File
+```bash
+unzip bot_telegram_fixed_files.zip
+cd telegram-ai-bot
+```
 
-### `/bot`
-Fitur ini memungkinkan Anda mengatur kepribadian AI bot dan mereset percakapan. Ketika Anda mengetik `/bot`, bot akan:
+### 2. Install Dependensi
+```bash
+npm install
+```
 
--   Mengirimkan gambar acak dari koleksi yang telah disediakan.
--   Menampilkan tombol-tombol berikut:
-    -   **✨ Atur Kepribadian ✨** dan **🔄 Reset Percakapan 🔄** akan ditampilkan dalam satu baris.
-    -   Pilihan kepribadian (Santai & Humor, Formal & Informatif, Kreatif & Imajinatif) akan ditampilkan dalam dua baris, diikuti dengan tombol **🔄 Reset Percakapan 🔄** di baris terpisah untuk kerapian.
+### 3. Konfigurasi Bot
+Edit file `config.js` dan sesuaikan:
+- `telegram.token`: Token bot Telegram Anda
+- `telegram.adminId`: ID Telegram admin
 
-## Peningkatan AI (Blackbox AI)
+### 4. Jalankan Bot
+```bash
+npm start
+```
 
-Bot sekarang menggunakan API Blackbox AI untuk respons yang lebih cerdas dan relevan. Masalah batasan karakter pada API telah diatasi dengan penyesuaian pada kode bot. Ini akan membuat percakapan dengan bot terasa lebih alami dan informatif.
+## Command yang Tersedia
 
-## Perubahan Kepribadian AI
+- `/start` - Memulai percakapan dengan bot
+- `/help` - Menampilkan bantuan
+- `/pin <query>` - Mencari gambar dari Pinterest
+- `/clear` - Menghapus memori percakapan
+- `/bot` - Mengatur kepribadian bot dan reset percakapan
+- `/stats` - Menampilkan statistik bot (khusus admin)
 
-Kepribadian AI bot telah diubah menjadi lebih santai, humoris, dan suka melawak secara default. Anda dapat mengubahnya melalui command `/bot`.
+## Sistem Memori yang Ditingkatkan
 
-## Cara Menjalankan Bot
+Bot ini menggunakan sistem memori percakapan yang canggih:
 
-1.  **Ekstrak file:** Pastikan Anda telah mengekstrak semua file bot ke dalam satu folder.
-2.  **Instal dependensi:** Buka terminal di dalam folder bot dan jalankan perintah berikut:
-    ```bash
-    npm install
-    ```
-3.  **Konfigurasi Bot:** Buka file `config.js` dan pastikan `TELEGRAM_TOKEN` dan `ADMIN_ID` sudah sesuai dengan bot Anda.
-4.  **Jalankan Bot:** Setelah dependensi terinstal, jalankan bot dengan perintah:
-    ```bash
-    node bot.js
-    ```
+- **Konteks Dinamis**: Menggunakan batas token (900 karakter) bukan jumlah pesan tetap
+- **Timestamp**: Setiap pesan memiliki timestamp untuk tracking waktu
+- **Memori Jangka Panjang**: Dapat mengingat percakapan yang lebih panjang
+- **Efisiensi Token**: Menghindari overflow API dengan manajemen token yang dinamis
 
-Bot akan mulai berjalan dan siap menerima pesan di Telegram.
+## Struktur File
+
+```
+telegram-ai-bot/
+├── bot.js              # File utama bot
+├── config.js           # Konfigurasi bot
+├── package.json        # Dependensi dan scripts
+├── package-lock.json   # Lock file dependensi
+├── README.md           # Dokumentasi ini
+└── otak.json          # File memori percakapan (dibuat otomatis)
+```
 
 ## Troubleshooting
 
-Jika Anda mengalami masalah, pastikan:
--   Koneksi internet stabil.
--   `TELEGRAM_TOKEN` di `config.js` sudah benar.
--   Semua dependensi telah terinstal dengan benar (`npm install`).
+### Bot tidak merespons
+- Pastikan token bot sudah benar di `config.js`
+- Cek koneksi internet
+- Pastikan API AI eksternal berfungsi
 
-Jika masalah berlanjut, periksa log di terminal untuk pesan error lebih lanjut.
+### Error saat install
+```bash
+npm cache clean --force
+npm install
+```
 
+### Menjalankan dalam mode development
+```bash
+npm run dev
+```
+
+## Kontribusi
+
+Jika Anda ingin berkontribusi pada pengembangan bot ini, silakan buat pull request atau laporkan bug melalui issues.
+
+## Lisensi
+
+ISC License - Bebas digunakan dan dimodifikasi.
 
