@@ -1,0 +1,19 @@
+{
+  "name": "telegram-ai-bot",
+  "version": "1.0.0",
+  "description": "Bot Telegram dengan AI respons otomatis menggunakan aimlapi.com",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["telegram", "bot", "ai", "chatbot", "nodejs"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.11.0",
+    "node-telegram-bot-api": "^0.66.0"
+  }
+}
+
