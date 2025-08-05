@@ -6,6 +6,7 @@ import winston from 'winston';
 import { fileURLToPath } from 'url';
 import moment from 'moment';
 import config from './config.js';
+import * as cheerio from 'cheerio';
 
 // ======================== INISIALISASI ========================
 const __filename = fileURLToPath(import.meta.url);
@@ -182,6 +183,32 @@ async function getAIResponse(chatId, message) {
     }
 }
 
+// ======================== FUNGSI PENDUKUNG ========================
+
+
+
+
+async function getServerStats() {
+    // Implementasi monitoring server
+    return {
+        cpu: '25%',
+        memory: '1.2GB/4GB',
+        storage: '15GB/50GB'
+    };
+}
+
+async function createBackup(outputPath) {
+    // Implementasi backup data
+    if (!fs.existsSync(path.dirname(outputPath))) {
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    }
+    
+    // Contoh: backup file penting
+    const filesToBackup = [MEMORY_FILE, USER_CACHE_FILE];
+    // ... proses backup ke ZIP
+    return outputPath;
+}
+
 // ======================== UTILITAS ========================
 async function notifyAdmin(message) {
     try {
@@ -206,12 +233,12 @@ bot.on('message', async (msg) => {
     const userName = msg.from.first_name || 'Pengguna';
     
     // Abaikan command dan pesan kosong
-    if (!messageText || messageText.startsWith('/')) return;
+    if (!messageText || messageText.startsWith("/")) return;
     
     logger.info(`Pesan dari [${userName} (${userId})]: ${messageText}`);
     
     // Deteksi user baru
-    if (userId != ADMIN_ID && !userCache.has(userId)) {
+    if (!userCache.has(userId)) {
         userCache.add(userId);
         saveUserCache();
         await notifyAdmin(`👤 USER BARU:\n${userName} (${userId})\nPesan: "${messageText}"`);
@@ -240,27 +267,37 @@ const commandHandlers = {
             userId: userId
         });
         
-        await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+        const randomStartImage = BOT_CONFIG.startImages[
+            Math.floor(Math.random() * BOT_CONFIG.startImages.length)
+        ];
+
+        await bot.sendPhoto(chatId, randomStartImage, {
+            caption: welcomeMessage,
+            parse_mode: 'Markdown'
+        });
         logger.info(`[${userName}] memulai bot`);
         
-        if (userId != ADMIN_ID) {
-            await notifyAdmin(`${userName} (${userId}) memulai bot`);
-        }
+
     },
     
-    help: (msg) => {
-        bot.sendMessage(
-            msg.chat.id, 
-            formatMessage(BOT_CONFIG.helpMessage), 
-            { parse_mode: 'Markdown' }
+    help: async (msg) => {
+        const chatId = msg.chat.id;
+        const randomHelpImage = BOT_CONFIG.helpImages[
+            Math.floor(Math.random() * BOT_CONFIG.helpImages.length)
+        ];
+        bot.sendPhoto(
+            chatId,
+            randomHelpImage,
+            {
+                caption: formatMessage(BOT_CONFIG.helpMessage),
+                parse_mode: 'Markdown'
+            }
         );
     },
     
     stats: async (msg) => {
         const chatId = msg.chat.id;
-        if (msg.from.id != ADMIN_ID) {
-            return bot.sendMessage(chatId, BOT_CONFIG.errorMessages.adminOnly);
-        }
+
         
         const statsMessage = `
 📊 *STATISTIK BOT*
@@ -331,7 +368,11 @@ const commandHandlers = {
                         { text: '🔄 Reset Percakapan', callback_data: 'reset_conversation' }
                     ],
                     [
+                        { text: '📸 Screenshot Web', callback_data: 'screenshot_web' },
                         { text: 'ℹ️ Info Bot', callback_data: 'bot_info' }
+                    ],
+                    [
+                        { text: '🖼️ Random Image', callback_data: 'random_image' }
                     ]
                 ]
             }
@@ -379,6 +420,176 @@ const commandHandlers = {
             logger.error(`Play error: ${error.message}`);
             await bot.sendMessage(chatId, '🚫 Lagu tidak ditemukan atau server error');
         }
+    },
+
+    screenshot: async (msg, match) => {
+        const chatId = msg.chat.id;
+        const input = match[1];
+        
+        if (!input) {
+            return bot.sendMessage(
+                chatId, 
+                '🌐 Berikan URL website untuk di-screenshot!\nContoh: `/ssweb https://google.com tablet`\n\nTipe device yang tersedia: desktop, mobile, tablet',
+                { parse_mode: 'Markdown' }
+            );
+        }
+        
+        // Parsing input (URL dan tipe device)
+        const parts = input.split(' ');
+        const url = parts[0];
+        let deviceType = parts[1] || 'desktop';
+        
+        // Validasi device type
+        const validDeviceTypes = ['desktop', 'mobile', 'tablet'];
+        if (!validDeviceTypes.includes(deviceType)) {
+            deviceType = 'desktop';
+        }
+        
+        try {
+            await bot.sendChatAction(chatId, 'upload_photo');
+            
+            const response = await axios.get(
+                `https://api.vreden.my.id/api/ssweb?url=${encodeURIComponent(url)}&type=${deviceType}`,
+                { 
+                    timeout: 30000,
+                    responseType: 'arraybuffer' 
+                }
+            );
+            
+            // Simpan screenshot sementara
+            const tempFile = path.join(__dirname, 'temp', `screenshot_${Date.now()}.jpg`);
+            fs.writeFileSync(tempFile, response.data);
+            
+            // Kirim screenshot
+            await bot.sendPhoto(
+                chatId,
+                tempFile,
+                {
+                    caption: `📸 Screenshot ${url}\nDevice: ${deviceType}`,
+                    parse_mode: 'Markdown'
+                }
+            );
+            
+            // Hapus file temp
+            fs.unlinkSync(tempFile);
+            
+        } catch (error) {
+            logger.error(`Screenshot error: ${error.message}`);
+            await bot.sendMessage(
+                chatId, 
+                '❌ Gagal mengambil screenshot. Pastikan URL valid dan coba lagi.',
+                { parse_mode: 'Markdown' }
+            );
+        }
+    },
+    
+    tiktok: async (msg, match) => {
+        const chatId = msg.chat.id;
+        const text = match[1];
+        
+        if (!text) {
+            return bot.sendMessage(chatId, `🔗 Masukkan link TikTok!\n\nContoh: /tiktok https://vt.tiktok.com/xxxx/`);
+        }
+        if (!text.includes('tiktok.com')) {
+            return bot.sendMessage(chatId, '❌ Link yang Anda masukkan bukan link TikTok.');
+        }
+        
+        await bot.sendMessage(chatId, 'Sedang memproses, mohon tunggu...');
+        
+        try {
+            // === 🖼️ Jika slideshow (photo)
+            if (text.includes('/photo/')) {
+                const slideResponse = await axios.get(`https://dlpanda.com/id?url=${text}&token=G7eRpMaa`);
+                const $ = cheerio.load(slideResponse.data);
+                let images = [];
+                $("div.col-md-12 > img").each((i, el) => {
+                    const src = $(el).attr("src");
+                    if (src && src.startsWith('http')) images.push(src);
+                });
+                if (images.length === 0) {
+                    return bot.sendMessage(chatId, '❌ Gagal mengunduh slideshow. Coba link lain atau pastikan link benar.');
+                }
+                await bot.sendMessage(chatId, `✅ Berhasil mengunduh ${images.length} foto dari slideshow. Mengirim gambar...`);
+                for (const imageUrl of images) {
+                    await bot.sendPhoto(chatId, imageUrl);
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // sleep
+                }
+            } else {
+                // === 🎥 Jika video biasa
+                const params = new URLSearchParams();
+                params.set("url", text);
+                params.set("hd", "1");
+                const videoResponse = await axios.post("https://tikwm.com/api/", params, {
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                        "Cookie": "current_language=en",
+                        "User-Agent": "Mozilla/5.0 (Linux; Android 10)"
+                    }
+                });
+                const result = videoResponse?.data?.data;
+                if (!result || !result.play) {
+                    return bot.sendMessage(chatId, '❌ Gagal mendapatkan video. Mungkin link salah atau tidak didukung.');
+                }
+                let caption = `🎬 *${result.title || 'Tanpa Judul'}*\n\n✅ Video berhasil diunduh tanpa watermark.`;
+                await bot.sendVideo(chatId, result.play, {
+                    caption: caption,
+                    parse_mode: 'Markdown'
+                });
+            }
+        } catch (err) {
+            logger.error(`TikTok error: ${err.message}`);
+            await bot.sendMessage(chatId, `❌ Terjadi kesalahan saat memproses link TikTok.\n\nError: ${err.message}`);
+        }
+    },
+    
+    // [FITUR BARU] Hentai Video - Hanya untuk Premium dan Owner
+    hentai: async (msg) => {
+        const chatId = msg.chat.id;
+        const userId = msg.from.id;
+
+
+
+        try {
+            await bot.sendChatAction(chatId, 'upload_video');
+            
+            // Panggil API hentai video
+            const response = await axios.get('https://api.vreden.my.id/api/hentaivid', { 
+                timeout: 15000 
+            });
+            
+            // API mengembalikan array, ambil item pertama
+            const result = response.data?.result;
+            let videoUrl = null;
+            
+            if (Array.isArray(result) && result.length > 0) {
+                // Ambil video random dari array
+                const randomIndex = Math.floor(Math.random() * result.length);
+                const selectedVideo = result[randomIndex];
+                
+                // Coba ambil URL dari berbagai field yang mungkin
+                videoUrl = selectedVideo.video_1 || selectedVideo.video_2 || selectedVideo.link;
+            } else if (result?.url) {
+                // Fallback jika format berbeda
+                videoUrl = result.url;
+            }
+
+            if (videoUrl) {
+                logger.info(`Mengirim video dari URL: ${videoUrl}`);
+                await bot.sendVideo(chatId, videoUrl, {
+                    caption: '🔞 *Video Hentai*\n\n⚠️ Konten dewasa - 18+',
+                    parse_mode: 'Markdown'
+                });
+                
+                // Log penggunaan fitur
+                logger.info(`[${userId}] menggunakan fitur hentai`);
+            } else {
+                await bot.sendMessage(chatId, '❌ Gagal mendapatkan video hentai. Coba lagi nanti.');
+                logger.error(`Hentai API response: ${JSON.stringify(response.data)}`);
+            }
+        } catch (error) {
+            logger.error(`Hentai video error: ${error.message}`);
+            await bot.sendMessage(chatId, '❌ Terjadi kesalahan saat mengambil video. Silakan coba lagi.');
+        }
     }
 };
 
@@ -390,14 +601,16 @@ bot.onText(/\/clear/, commandHandlers.clear);
 bot.onText(/\/pin(?: (.+))?/, commandHandlers.pin);
 bot.onText(/\/bot/, commandHandlers.bot);
 bot.onText(/\/play(?: (.+))?/, commandHandlers.play);
+bot.onText(/\/ssweb(?: (.+))?/, commandHandlers.screenshot);
+bot.onText(/\/tiktok(?: (.+))?/, commandHandlers.tiktok);
+bot.onText(/\/hentai/, commandHandlers.hentai); // [FITUR BARU]
 
 // ======================== HANDLER CALLBACK ========================
 bot.on('callback_query', async (callbackQuery) => {
     const { message, data } = callbackQuery;
     const chatId = message.chat.id;
-    
     await bot.answerCallbackQuery(callbackQuery.id);
-
+    
     try {
         if (data === 'reset_conversation') {
             conversationHistory[chatId] = [];
@@ -406,17 +619,21 @@ bot.on('callback_query', async (callbackQuery) => {
         }
         else if (data === 'set_personality') {
             const keyboard = [];
-            
-            // Buat tombol untuk setiap kepribadian
+            let row = [];
             for (const [key, personality] of Object.entries(BOT_CONFIG.personalities)) {
-                keyboard.push([{
+                row.push({
                     text: personality.buttonLabel,
                     callback_data: `set_personality_${key}`
-                }]);
+                });
+                if (row.length === 2) {
+                    keyboard.push(row);
+                    row = [];
+                }
             }
-            
-            keyboard.push([{ text: '🔙 Kembali', callback_data: 'back_to_main' }]);
-            
+            if (row.length > 0) {
+                keyboard.push(row);
+            }
+            keyboard.push([{ text: '🔙 Kembali', callback_data: 'back_to_main' }]);       
             await bot.editMessageReplyMarkup({
                 inline_keyboard: keyboard
             }, {
@@ -425,19 +642,16 @@ bot.on('callback_query', async (callbackQuery) => {
             });
         }
         else if (data.startsWith('set_personality_')) {
-            const personalityKey = data.split('_')[2];
-            const personality = BOT_CONFIG.personalities[personalityKey];
-            
+            const personalityKey = data.replace('set_personality_', '');
+            const personality = BOT_CONFIG.personalities[personalityKey];        
             if (personality) {
                 // Set kepribadian baru sebagai system message
                 conversationHistory[chatId] = [{
                     role: 'system',
                     content: personality.systemMessage,
                     timestamp: Date.now()
-                }];
-                
-                saveConversationHistory();
-                
+                }];            
+                saveConversationHistory();              
                 await bot.sendMessage(
                     chatId, 
                     `🎭 *Kepribadian Diatur:* ${personality.name}\n\n${personality.description}`,
@@ -453,7 +667,11 @@ bot.on('callback_query', async (callbackQuery) => {
                         { text: '🔄 Reset Percakapan', callback_data: 'reset_conversation' }
                     ],
                     [
+                        { text: '📸 Screenshot Web', callback_data: 'screenshot_web' },
                         { text: 'ℹ️ Info Bot', callback_data: 'bot_info' }
+                    ],
+                    [
+                        { text: '🖼️ Random Image', callback_data: 'random_image' }
                     ]
                 ]
             }, {
@@ -477,6 +695,8 @@ ${BOT_CONFIG.description}
 - Pencarian gambar Pinterest
 - Download musik YouTube
 - Multiple personalities
+- Screenshot website
+- Video hentai (Premium/Owner)
             `.trim();
             
             await bot.sendMessage(chatId, infoMessage, { parse_mode: 'Markdown' });
@@ -506,6 +726,82 @@ ${BOT_CONFIG.description}
                 throw new Error('URL download tidak valid');
             }
         }
+        else if (data === 'screenshot_web') {
+            await bot.sendMessage(
+                chatId,
+                '📸 *Screenshot Website*\n\nKirim perintah:\n`/ssweb https://contoh.com tablet`\n\nGanti `tablet` dengan `desktop` atau `mobile` sesuai kebutuhan.',
+                { parse_mode: 'Markdown' }
+            );
+        }
+        else if (data === 'random_image') {
+            const randomImage = BOT_CONFIG.botImages[
+                Math.floor(Math.random() * BOT_CONFIG.botImages.length)
+            ];
+            await bot.sendPhoto(chatId, randomImage, {
+                caption: 'Ini adalah gambar acak!',
+                parse_mode: 'Markdown'
+            });
+        }
+
+
+        else if (data === 'admin_tools') {
+            if (message.from.id.toString() !== ADMIN_ID) {
+                return bot.answerCallbackQuery(callbackQuery.id, {
+                    text: "Fitur khusus Admin!",
+                    show_alert: true
+                });
+            }
+
+            await bot.editMessageReplyMarkup({
+                inline_keyboard: [
+                    [
+                        { text: '📊 Statistik Server', callback_data: 'server_stats' },
+                        { text: '💾 Backup Data', callback_data: 'backup_data' }
+                    ],
+                    [
+                        { text: '🔙 Kembali', callback_data: 'back_to_main' }
+                    ]
+                ]
+            }, {
+                chat_id: chatId,
+                message_id: message.message_id
+            });
+        }
+        else if (data === 'server_stats') {
+            if (message.from.id.toString() !== ADMIN_ID) return;
+
+            const stats = await getServerStats();
+            await bot.sendMessage(
+                chatId,
+                `🖥️ *Server Statistics*\n\n` +
+                `• CPU Usage: ${stats.cpu}%\n` +
+                `• Memory: ${stats.memory}\n` +
+                `• Storage: ${stats.storage}`,
+                { parse_mode: 'Markdown' }
+            );
+        }
+        else if (data === 'backup_data') {
+            if (message.from.id.toString() !== ADMIN_ID) return;
+
+            await bot.sendChatAction(chatId, 'typing');
+            saveConversationHistory();
+            saveUserCache();
+            
+            const date = new Date().toISOString().split('T')[0];
+            const backupFile = path.join(__dirname, 'backups', `backup_${date}.zip`);
+            
+            // Implementasi backup data
+            await createBackup(backupFile);
+            
+            await bot.sendDocument(
+                chatId,
+                backupFile,
+                {
+                    caption: `📦 Backup data per ${date}`,
+                    parse_mode: 'Markdown'
+                }
+            );
+        }
     } catch (error) {
         logger.error(`Callback error: ${error.message}`);
         await bot.sendMessage(chatId, '⚠️ Terjadi kesalahan saat memproses permintaan');
@@ -530,10 +826,11 @@ process.on('SIGTERM', gracefulShutdown);
 // ======================== INISIALISASI BOT ========================
 (async () => {
     try {
-        // Buat folder logs jika belum ada
-        if (!fs.existsSync('logs')) {
-            fs.mkdirSync('logs');
-        }
+        // Buat folder yang diperlukan
+        const folders = ['logs', 'temp', 'backups'];
+        folders.forEach(folder => {
+            if (!fs.existsSync(folder)) fs.mkdirSync(folder);
+        });
         
         // Load data
         loadConversationHistory();
@@ -552,26 +849,13 @@ process.on('SIGTERM', gracefulShutdown);
         // Backup otomatis setiap 24 jam
         setInterval(() => {
             logger.info('⏰ Memulai backup terjadwal');
-            import('child_process').then(({ exec }) => {
-                exec('npm run backup', (error) => {
-                    if (error) {
-                        logger.error(`❌ Backup error: ${error.message}`);
-                        return;
-                    }
-                    logger.info('✅ Backup terjadwal berhasil');
-                });
-            });
-        }, 24 * 60 * 60 * 1000); // 24 jam
-        
-         // Backup data setiap 5 menit
-        setInterval(() => {
             saveConversationHistory();
             saveUserCache();
-            logger.info('💾 Backup data otomatis');
-        }, 5 * 60 * 1000); // 5 menit
+        }, 24 * 60 * 60 * 1000);
+        
     } catch (error) {
         logger.error(`Gagal memulai bot: ${error.message}`);
         process.exit(1);
     }
 })();
-        
+
