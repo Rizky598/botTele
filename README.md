@@ -21,7 +21,7 @@ Bot Telegram pintar dengan AI respons otomatis dan sistem memori percakapan yang
 
 ### Prasyarat
 - Node.js v18 atau lebih baru
-- Token Bot Telegram (dapatkan dari [@𓆩۞𓆪𝐑𝐢𝐳𝐤𝐲-𝐀𝐢𓆩۞𓆪](https://t.me/RIZKT_GPT_BOT))
+- Token Bot Telegram (dapatkan dari  [@BotFather](https://t.me/BotFather))
 - Kunci API Google Gemini
 
 ### 1. Klon Repositori
