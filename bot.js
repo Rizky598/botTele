@@ -7,11 +7,9 @@ import { fileURLToPath } from 'url';
 import moment from 'moment';
 import config from './config.js';
 import * as cheerio from 'cheerio';
-
 // ======================== INISIALISASI ========================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 // Konfigurasi logger
 const logger = winston.createLogger({
     level: 'info',
@@ -27,21 +25,17 @@ const logger = winston.createLogger({
         new winston.transports.File({ filename: path.join(__dirname, 'logs', 'error.log'), level: 'error' })
     ]
 });
-
 const conversationHistory = {};
 const MEMORY_FILE = path.join(__dirname, 'otak.json');
 const USER_CACHE_FILE = path.join(__dirname, 'user_cache.json');
 let userCache = new Set();
-
 // Konfigurasi dari file
 const { token: TELEGRAM_TOKEN, adminId: ADMIN_ID } = config.telegram;
 const GOOGLE_AI_API_KEY = config.google.aiKey;
 const GOOGLE_AI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent";
 const BOT_CONFIG = config.bot;
-
 // Inisialisasi bot
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
-
 // ======================== MANAJEMEN MEMORI ========================
 function loadConversationHistory() {
     if (fs.existsSync(MEMORY_FILE)) {
@@ -65,7 +59,6 @@ function loadConversationHistory() {
         }
     }
 }
-
 function saveConversationHistory() {
     try {
         const validData = {};
@@ -79,7 +72,6 @@ function saveConversationHistory() {
         logger.error(`Error menyimpan memori: ${error.message}`);
     }
 }
-
 function loadUserCache() {
     if (fs.existsSync(USER_CACHE_FILE)) {
         try {
@@ -91,7 +83,6 @@ function loadUserCache() {
         }
     }
 }
-
 function saveUserCache() {
     try {
         fs.writeFileSync(USER_CACHE_FILE, JSON.stringify([...userCache]), 'utf8');
@@ -99,13 +90,10 @@ function saveUserCache() {
         logger.error(`Error menyimpan cache pengguna: ${error.message}`);
     }
 }
-
 function getRelevantConversationContext(chatId, maxTokens = 900) {
     if (!conversationHistory[chatId]?.length) return [];
-    
     let currentTokens = 0;
     const relevantMessages = [];
-    
     // Iterasi dari pesan terbaru
     for (let i = conversationHistory[chatId].length - 1; i >= 0; i--) {
         const msg = conversationHistory[chatId][i];
@@ -120,13 +108,11 @@ function getRelevantConversationContext(chatId, maxTokens = 900) {
     }
     return relevantMessages;
 }
-
 // ======================== FUNGSI AI ========================
 async function getAIResponse(chatId, message) {
     // Inisialisasi memori jika belum ada
     if (!conversationHistory[chatId]) {
-        conversationHistory[chatId] = [];
-        
+        conversationHistory[chatId] = [];     
         // Tambahkan system message jika ada
         if (BOT_CONFIG.defaultPersonality) {
             const personality = BOT_CONFIG.personalities[BOT_CONFIG.defaultPersonality];
@@ -139,55 +125,42 @@ async function getAIResponse(chatId, message) {
             }
         }
     }
-    
     // Tambahkan pesan user
     conversationHistory[chatId].push({ 
         role: 'user', 
         content: message, 
         timestamp: Date.now() 
-    });
-    
+    }); 
     try {
         const relevantMessages = getRelevantConversationContext(chatId);
         const formattedMessages = relevantMessages.map(msg => ({
             role: msg.role === 'user' ? 'user' : 'model',
             parts: [{ text: msg.content }]
-        }));
-        
+        }));     
         const response = await axios.post(
             `${GOOGLE_AI_API_URL}?key=${GOOGLE_AI_API_KEY}`,
             { contents: formattedMessages },
             { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
-        );
-        
+        );     
         const aiResponse = response.data.candidates[0].content.parts[0].text;
-        
         // Tambahkan respon AI
         conversationHistory[chatId].push({ 
             role: 'assistant', 
             content: aiResponse, 
             timestamp: Date.now() 
-        });
-        
+        });      
         // Simpan memori secara async
-        setImmediate(saveConversationHistory);
-        
+        setImmediate(saveConversationHistory);   
         return aiResponse;
     } catch (error) {
         logger.error(`Error AI: ${error.response?.data || error.message}`);
-        
         // Hapus pesan user yang gagal diproses
-        conversationHistory[chatId].pop();
-        
+        conversationHistory[chatId].pop();    
         return BOT_CONFIG.errorMessages.apiFailure;
     }
 }
 
 // ======================== FUNGSI PENDUKUNG ========================
-
-
-
-
 async function getServerStats() {
     // Implementasi monitoring server
     return {
@@ -196,19 +169,16 @@ async function getServerStats() {
         storage: '15GB/50GB'
     };
 }
-
 async function createBackup(outputPath) {
     // Implementasi backup data
     if (!fs.existsSync(path.dirname(outputPath))) {
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     }
-    
     // Contoh: backup file penting
     const filesToBackup = [MEMORY_FILE, USER_CACHE_FILE];
     // ... proses backup ke ZIP
     return outputPath;
 }
-
 // ======================== UTILITAS ========================
 async function notifyAdmin(message) {
     try {
@@ -217,33 +187,27 @@ async function notifyAdmin(message) {
         logger.error(`Gagal mengirim notifikasi admin: ${error.message}`);
     }
 }
-
 function formatMessage(text, context = {}) {
     return text
         .replace(/{name}/g, context.name || 'Pengguna')
         .replace(/{botName}/g, BOT_CONFIG.name || 'Bot AI')
         .replace(/{userId}/g, context.userId || 'N/A');
 }
-
 // ======================== HANDLER PESAN UTAMA ========================
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const messageText = msg.text;
     const userId = msg.from.id;
     const userName = msg.from.first_name || 'Pengguna';
-    
     // Abaikan command dan pesan kosong
     if (!messageText || messageText.startsWith("/")) return;
-    
     logger.info(`Pesan dari [${userName} (${userId})]: ${messageText}`);
-    
     // Deteksi user baru
     if (!userCache.has(userId)) {
         userCache.add(userId);
         saveUserCache();
         await notifyAdmin(`👤 USER BARU:\n${userName} (${userId})\nPesan: "${messageText}"`);
     }
-    
     try {
         await bot.sendChatAction(chatId, 'typing');
         const aiResponse = await getAIResponse(chatId, messageText);
@@ -254,7 +218,6 @@ bot.on('message', async (msg) => {
         await bot.sendMessage(chatId, BOT_CONFIG.errorMessages.general);
     }
 });
-
 // ======================== HANDLER COMMAND ========================
 const commandHandlers = {
     start: async (msg) => {
@@ -266,25 +229,17 @@ const commandHandlers = {
             name: userName,
             userId: userId
         });
-        
-        const randomStartImage = BOT_CONFIG.startImages[
-            Math.floor(Math.random() * BOT_CONFIG.startImages.length)
-        ];
+        const randomStartImage = await getWaifuImage();
 
         await bot.sendPhoto(chatId, randomStartImage, {
             caption: welcomeMessage,
             parse_mode: 'Markdown'
         });
         logger.info(`[${userName}] memulai bot`);
-        
-
     },
-    
     help: async (msg) => {
         const chatId = msg.chat.id;
-        const randomHelpImage = BOT_CONFIG.helpImages[
-            Math.floor(Math.random() * BOT_CONFIG.helpImages.length)
-        ];
+        const randomHelpImage = await getWaifuImage();
         bot.sendPhoto(
             chatId,
             randomHelpImage,
@@ -293,12 +248,9 @@ const commandHandlers = {
                 parse_mode: 'Markdown'
             }
         );
-    },
-    
+    }, 
     stats: async (msg) => {
-        const chatId = msg.chat.id;
-
-        
+        const chatId = msg.chat.id;   
         const statsMessage = `
 📊 *STATISTIK BOT*
 • 👥 Pengguna: ${userCache.size}
@@ -306,10 +258,8 @@ const commandHandlers = {
 • 🧠 Ukuran memori: ${Math.round(fs.statSync(MEMORY_FILE)?.size / 1024 || 0)} KB
 • ⚙️ Versi: ${BOT_CONFIG.version}
         `.trim();
-        
         await bot.sendMessage(chatId, statsMessage, { parse_mode: 'Markdown' });
     },
-    
     clear: async (msg) => {
         const chatId = msg.chat.id;
         conversationHistory[chatId] = [];
@@ -317,11 +267,9 @@ const commandHandlers = {
         await bot.sendMessage(chatId, '🧹 Memori percakapan berhasil dihapus!');
         logger.info(`[${chatId}] hapus memori`);
     },
-    
     pin: async (msg, match) => {
         const chatId = msg.chat.id;
         const query = match[1];
-        
         if (!query) {
             return bot.sendMessage(
                 chatId, 
@@ -329,14 +277,12 @@ const commandHandlers = {
                 { parse_mode: 'Markdown' }
             );
         }
-        
         try {
             await bot.sendChatAction(chatId, 'upload_photo');
             const response = await axios.get(
                 `https://api.vreden.my.id/api/pinterest?query=${encodeURIComponent(query)}`,
                 { timeout: 10000 }
             );
-            
             const imageUrls = response.data?.result || [];
             if (imageUrls.length > 0) {
                 await bot.sendPhoto(chatId, imageUrls[0], { 
@@ -351,13 +297,9 @@ const commandHandlers = {
             await bot.sendMessage(chatId, BOT_CONFIG.errorMessages.apiFailure);
         }
     },
-    
     bot: async (msg) => {
         const chatId = msg.chat.id;
-        const randomImage = BOT_CONFIG.botImages[
-            Math.floor(Math.random() * BOT_CONFIG.botImages.length)
-        ];
-        
+        const randomImage = await getWaifuImage();
         await bot.sendPhoto(chatId, randomImage, {
             caption: '⚙️ *PANEL KONTROL BOT*',
             parse_mode: 'Markdown',
@@ -378,11 +320,9 @@ const commandHandlers = {
             }
         });
     },
-    
     play: async (msg, match) => {
         const chatId = msg.chat.id;
         const query = match[1];
-        
         if (!query) {
             return bot.sendMessage(
                 chatId, 
@@ -390,19 +330,16 @@ const commandHandlers = {
                 { parse_mode: 'Markdown' }
             );
         }
-        
         try {
             await bot.sendChatAction(chatId, 'typing');
             const response = await axios.get(
                 `https://api.vreden.my.id/api/ytplaymp3?query=${encodeURIComponent(query)}`,
                 { timeout: 15000 }
             );
-            
             const result = response.data?.result;
             if (!result?.metadata) {
                 throw new Error('Data tidak valid');
             }
-            
             const { title, url, image } = result.metadata;
             await bot.sendPhoto(chatId, image, {
                 caption: `🎶 *${title}*\n🔗 [Tonton di YouTube](${url})`,
@@ -421,11 +358,9 @@ const commandHandlers = {
             await bot.sendMessage(chatId, '🚫 Lagu tidak ditemukan atau server error');
         }
     },
-
     screenshot: async (msg, match) => {
         const chatId = msg.chat.id;
         const input = match[1];
-        
         if (!input) {
             return bot.sendMessage(
                 chatId, 
@@ -433,21 +368,17 @@ const commandHandlers = {
                 { parse_mode: 'Markdown' }
             );
         }
-        
         // Parsing input (URL dan tipe device)
         const parts = input.split(' ');
         const url = parts[0];
         let deviceType = parts[1] || 'desktop';
-        
         // Validasi device type
         const validDeviceTypes = ['desktop', 'mobile', 'tablet'];
         if (!validDeviceTypes.includes(deviceType)) {
             deviceType = 'desktop';
         }
-        
         try {
             await bot.sendChatAction(chatId, 'upload_photo');
-            
             const response = await axios.get(
                 `https://api.vreden.my.id/api/ssweb?url=${encodeURIComponent(url)}&type=${deviceType}`,
                 { 
@@ -455,11 +386,9 @@ const commandHandlers = {
                     responseType: 'arraybuffer' 
                 }
             );
-            
             // Simpan screenshot sementara
             const tempFile = path.join(__dirname, 'temp', `screenshot_${Date.now()}.jpg`);
             fs.writeFileSync(tempFile, response.data);
-            
             // Kirim screenshot
             await bot.sendPhoto(
                 chatId,
@@ -469,10 +398,8 @@ const commandHandlers = {
                     parse_mode: 'Markdown'
                 }
             );
-            
             // Hapus file temp
             fs.unlinkSync(tempFile);
-            
         } catch (error) {
             logger.error(`Screenshot error: ${error.message}`);
             await bot.sendMessage(
@@ -482,20 +409,16 @@ const commandHandlers = {
             );
         }
     },
-    
     tiktok: async (msg, match) => {
         const chatId = msg.chat.id;
         const text = match[1];
-        
         if (!text) {
             return bot.sendMessage(chatId, `🔗 Masukkan link TikTok!\n\nContoh: /tiktok https://vt.tiktok.com/xxxx/`);
         }
         if (!text.includes('tiktok.com')) {
             return bot.sendMessage(chatId, '❌ Link yang Anda masukkan bukan link TikTok.');
         }
-        
         await bot.sendMessage(chatId, 'Sedang memproses, mohon tunggu...');
-        
         try {
             // === 🖼️ Jika slideshow (photo)
             if (text.includes('/photo/')) {
@@ -541,45 +464,35 @@ const commandHandlers = {
             await bot.sendMessage(chatId, `❌ Terjadi kesalahan saat memproses link TikTok.\n\nError: ${err.message}`);
         }
     },
-    
     // [FITUR BARU] Hentai Video - Hanya untuk Premium dan Owner
     hentai: async (msg) => {
         const chatId = msg.chat.id;
         const userId = msg.from.id;
-
-
-
         try {
-            await bot.sendChatAction(chatId, 'upload_video');
-            
+            await bot.sendChatAction(chatId, 'upload_video');        
             // Panggil API hentai video
             const response = await axios.get('https://api.vreden.my.id/api/hentaivid', { 
                 timeout: 15000 
-            });
-            
+            });  
             // API mengembalikan array, ambil item pertama
             const result = response.data?.result;
-            let videoUrl = null;
-            
+            let videoUrl = null;    
             if (Array.isArray(result) && result.length > 0) {
                 // Ambil video random dari array
                 const randomIndex = Math.floor(Math.random() * result.length);
-                const selectedVideo = result[randomIndex];
-                
+                const selectedVideo = result[randomIndex];      
                 // Coba ambil URL dari berbagai field yang mungkin
                 videoUrl = selectedVideo.video_1 || selectedVideo.video_2 || selectedVideo.link;
             } else if (result?.url) {
                 // Fallback jika format berbeda
                 videoUrl = result.url;
             }
-
             if (videoUrl) {
                 logger.info(`Mengirim video dari URL: ${videoUrl}`);
                 await bot.sendVideo(chatId, videoUrl, {
                     caption: '🔞 *Video Hentai*\n\n⚠️ Konten dewasa - 18+',
                     parse_mode: 'Markdown'
                 });
-                
                 // Log penggunaan fitur
                 logger.info(`[${userId}] menggunakan fitur hentai`);
             } else {
@@ -592,7 +505,6 @@ const commandHandlers = {
         }
     }
 };
-
 // Daftarkan handler command
 bot.onText(/\/start/, commandHandlers.start);
 bot.onText(/\/help/, commandHandlers.help);
@@ -604,13 +516,11 @@ bot.onText(/\/play(?: (.+))?/, commandHandlers.play);
 bot.onText(/\/ssweb(?: (.+))?/, commandHandlers.screenshot);
 bot.onText(/\/tiktok(?: (.+))?/, commandHandlers.tiktok);
 bot.onText(/\/hentai/, commandHandlers.hentai); // [FITUR BARU]
-
 // ======================== HANDLER CALLBACK ========================
 bot.on('callback_query', async (callbackQuery) => {
     const { message, data } = callbackQuery;
     const chatId = message.chat.id;
     await bot.answerCallbackQuery(callbackQuery.id);
-    
     try {
         if (data === 'reset_conversation') {
             conversationHistory[chatId] = [];
@@ -698,18 +608,15 @@ ${BOT_CONFIG.description}
 - Screenshot website
 - Video hentai (Premium/Owner)
             `.trim();
-            
             await bot.sendMessage(chatId, infoMessage, { parse_mode: 'Markdown' });
         }
         else if (data.startsWith('download_mp3_')) {
             const videoUrl = decodeURIComponent(data.replace('download_mp3_', ''));
             await bot.sendChatAction(chatId, 'upload_audio');
-            
             const response = await axios.get(
                 `https://api.vreden.my.id/api/ytmp3?url=${encodeURIComponent(videoUrl)}`,
                 { timeout: 30000 }
             );
-            
             const result = response.data?.result;
             if (result?.download?.url) {
                 await bot.sendAudio(
@@ -742,8 +649,6 @@ ${BOT_CONFIG.description}
                 parse_mode: 'Markdown'
             });
         }
-
-
         else if (data === 'admin_tools') {
             if (message.from.id.toString() !== ADMIN_ID) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
@@ -751,7 +656,6 @@ ${BOT_CONFIG.description}
                     show_alert: true
                 });
             }
-
             await bot.editMessageReplyMarkup({
                 inline_keyboard: [
                     [
@@ -782,17 +686,13 @@ ${BOT_CONFIG.description}
         }
         else if (data === 'backup_data') {
             if (message.from.id.toString() !== ADMIN_ID) return;
-
             await bot.sendChatAction(chatId, 'typing');
             saveConversationHistory();
             saveUserCache();
-            
             const date = new Date().toISOString().split('T')[0];
             const backupFile = path.join(__dirname, 'backups', `backup_${date}.zip`);
-            
             // Implementasi backup data
             await createBackup(backupFile);
-            
             await bot.sendDocument(
                 chatId,
                 backupFile,
@@ -807,11 +707,9 @@ ${BOT_CONFIG.description}
         await bot.sendMessage(chatId, '⚠️ Terjadi kesalahan saat memproses permintaan');
     }
 });
-
 // ======================== MANAJEMEN PROSES ========================
 bot.on('error', error => logger.error(`Bot error: ${error.message}`));
 bot.on('polling_error', error => logger.error(`Polling error: ${error.message}`));
-
 async function gracefulShutdown() {
     logger.info('🛑 Menghentikan bot...');
     saveConversationHistory();
@@ -819,10 +717,8 @@ async function gracefulShutdown() {
     await notifyAdmin('🔴 Bot dimatikan!');
     process.exit(0);
 }
-
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
-
 // ======================== INISIALISASI BOT ========================
 (async () => {
     try {
@@ -831,11 +727,9 @@ process.on('SIGTERM', gracefulShutdown);
         folders.forEach(folder => {
             if (!fs.existsSync(folder)) fs.mkdirSync(folder);
         });
-        
         // Load data
         loadConversationHistory();
         loadUserCache();
-        
         // Verifikasi koneksi bot
         const botInfo = await bot.getMe();
         logger.info(`
@@ -843,19 +737,64 @@ process.on('SIGTERM', gracefulShutdown);
 🤖 ${botInfo.first_name} (@${botInfo.username})
 📆 ${new Date().toLocaleString()}
         `.trim());
-        
         await notifyAdmin(`🚀 Bot aktif! ${botInfo.first_name} siap melayani`);
-        
         // Backup otomatis setiap 24 jam
         setInterval(() => {
             logger.info('⏰ Memulai backup terjadwal');
             saveConversationHistory();
             saveUserCache();
         }, 24 * 60 * 60 * 1000);
-        
     } catch (error) {
         logger.error(`Gagal memulai bot: ${error.message}`);
         process.exit(1);
     }
 })();
-
+async function getWaifuImage() {
+    try {
+        const response = await axios.get("https://api.waifu.pics/sfw/neko");
+        return response.data.url;
+    } catch (error) {
+        logger.error(`Error fetching Waifu image: ${error.message}`);
+        return null;
+    }
+}
+// ======================== HANDLER GRUP ========================
+bot.on("new_chat_members", async (msg) => {
+    const chatId = msg.chat.id;
+    const newMembers = msg.new_chat_members;
+    const chatTitle = msg.chat.title;
+    for (const member of newMembers) {
+        if (member.id === bot.options.id) {
+            // Bot ditambahkan ke grup
+            logger.info(`Bot ditambahkan ke grup: ${chatTitle} (${chatId})`);
+            await bot.sendMessage(chatId, BOT_CONFIG.groupMessages.botAddedMessage);
+        } else {
+            // Anggota baru bergabung
+            const memberName = member.first_name || member.username || "Seseorang";
+            const welcomeMessage = formatMessage(BOT_CONFIG.groupMessages.welcomeMessage, {
+                name: memberName,
+                groupName: chatTitle
+            });
+            await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+            logger.info(`${memberName} bergabung ke grup: ${chatTitle} (${chatId})`);
+        }
+    }
+});
+bot.on("left_chat_member", async (msg) => {
+    const chatId = msg.chat.id;
+    const leftMember = msg.left_chat_member;
+    const chatTitle = msg.chat.title;
+    if (leftMember.id === bot.options.id) {
+        // Bot dikeluarkan dari grup
+        logger.info(`Bot dikeluarkan dari grup: ${chatTitle} (${chatId})`);
+    } else {
+        // Anggota keluar
+        const memberName = leftMember.first_name || leftMember.username || "Seseorang";
+        const farewellMessage = formatMessage(BOT_CONFIG.groupMessages.farewellMessage, {
+            name: memberName,
+            groupName: chatTitle
+        });
+        await bot.sendMessage(chatId, farewellMessage, { parse_mode: 'Markdown' });
+        logger.info(`${memberName} keluar dari grup: ${chatTitle} (${chatId})`);
+    }
+});
