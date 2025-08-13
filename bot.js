@@ -110,6 +110,9 @@ function getRelevantConversationContext(chatId, maxTokens = 900) {
 }
 // ======================== FUNGSI AI ========================
 async function getAIResponse(chatId, message) {
+    if (!aiEnabled) {
+        return BOT_CONFIG.errorMessages.aiDisabled;
+    }
     // Inisialisasi memori jika belum ada
     if (!conversationHistory[chatId]) {
         conversationHistory[chatId] = [];     
@@ -161,6 +164,121 @@ async function getAIResponse(chatId, message) {
 }
 
 // ======================== FUNGSI PENDUKUNG ========================
+// [FITUR BARU] Fungsi untuk membuat akun panel
+async function createPanelAccount(packageInfo, userId, userName) {
+    try {
+        // Generate username dan password
+        const timestamp = Date.now().toString().slice(-6);
+        const username = `user_${userId}_${timestamp}`;
+        const password = generateRandomPassword(12);
+        
+        // Simulasi API call ke panel (ganti dengan API panel yang sebenarnya)
+        const panelApiResponse = await callPanelAPI({
+            action: 'create_user',
+            username: username,
+            password: password,
+            quota: packageInfo.quota,
+            duration: packageInfo.duration,
+            package_type: packageInfo.size
+        });
+        
+        if (panelApiResponse.success) {
+            // Simpan data akun ke database/file (opsional)
+            await savePanelAccountData({
+                username: username,
+                password: password,
+                userId: userId,
+                userName: userName,
+                package: packageInfo.size,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + (packageInfo.duration * 24 * 60 * 60 * 1000)).toISOString()
+            });
+            
+            return {
+                success: true,
+                username: username,
+                password: password,
+                panelUrl: config.panel.url,
+                panelPort: config.panel.port
+            };
+        } else {
+            return {
+                success: false,
+                error: panelApiResponse.error || 'Gagal membuat akun di panel'
+            };
+        }
+    } catch (error) {
+        logger.error(`Create panel account error: ${error.message}`);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+// Fungsi untuk generate password random
+function generateRandomPassword(length = 12) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+}
+
+// Fungsi untuk memanggil API panel (simulasi)
+async function callPanelAPI(data) {
+    try {
+        // Simulasi API call - ganti dengan API panel yang sebenarnya
+        if (config.panel.apiKey && config.panel.apiUrl) {
+            const response = await axios.post(config.panel.apiUrl, data, {
+                headers: {
+                    'Authorization': `Bearer ${config.panel.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 10000
+            });
+            return response.data;
+        } else {
+            // Mode simulasi jika tidak ada API key
+            logger.info(`Simulasi pembuatan akun panel: ${JSON.stringify(data)}`);
+            return {
+                success: true,
+                message: 'Akun berhasil dibuat (simulasi)'
+            };
+        }
+    } catch (error) {
+        logger.error(`Panel API error: ${error.message}`);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+// Fungsi untuk menyimpan data akun panel
+async function savePanelAccountData(accountData) {
+    try {
+        const accountsFile = path.join(__dirname, 'panel_accounts.json');
+        let accounts = [];
+        
+        // Load existing accounts
+        if (fs.existsSync(accountsFile)) {
+            const data = fs.readFileSync(accountsFile, 'utf8');
+            accounts = JSON.parse(data);
+        }
+        
+        // Add new account
+        accounts.push(accountData);
+        
+        // Save back to file
+        fs.writeFileSync(accountsFile, JSON.stringify(accounts, null, 2));
+        logger.info(`Panel account data saved: ${accountData.username}`);
+    } catch (error) {
+        logger.error(`Save panel account error: ${error.message}`);
+    }
+}
+
 async function getServerStats() {
     // Implementasi monitoring server
     return {
@@ -201,6 +319,12 @@ bot.on('message', async (msg) => {
     const userName = msg.from.first_name || 'Pengguna';
     // Abaikan command dan pesan kosong
     if (!messageText || messageText.startsWith("/")) return;
+
+    // Jika AI dinonaktifkan, abaikan pesan non-command
+    if (!aiEnabled) {
+        logger.info(`AI dinonaktifkan, mengabaikan pesan dari [${userName} (${userId})]: ${messageText}`);
+        return;
+    }
     logger.info(`Pesan dari [${userName} (${userId})]: ${messageText}`);
     // Deteksi user baru
     if (!userCache.has(userId)) {
@@ -306,6 +430,9 @@ const commandHandlers = {
             reply_markup: {
                 inline_keyboard: [
                     [
+                        { text: `AI: ${aiEnabled ? '✅ Aktif' : '❌ Nonaktif'}`, callback_data: 'toggle_ai' }
+                    ],
+                    [
                         { text: '✨ Atur Kepribadian', callback_data: 'set_personality' },
                         { text: '🔄 Reset Percakapan', callback_data: 'reset_conversation' }
                     ],
@@ -314,7 +441,8 @@ const commandHandlers = {
                         { text: 'ℹ️ Info Bot', callback_data: 'bot_info' }
                     ],
                     [
-                        { text: '🖼️ Random Image', callback_data: 'random_image' }
+                        { text: '🖼️ Random Image', callback_data: 'random_image' },
+                        { text: '🔧 Create Panel', callback_data: 'create_panel_menu' }
                     ]
                 ]
             }
@@ -503,6 +631,55 @@ const commandHandlers = {
             logger.error(`Hentai video error: ${error.message}`);
             await bot.sendMessage(chatId, '❌ Terjadi kesalahan saat mengambil video. Silakan coba lagi.');
         }
+    },
+    // [FITUR BARU] Create Panel - Pembuatan akun panel
+    createpanel: async (msg) => {
+        const chatId = msg.chat.id;
+        const userId = msg.from.id;
+        const userName = msg.from.first_name || 'User';
+        
+        try {
+            const panelImage = await getWaifuImage();
+            await bot.sendPhoto(chatId, panelImage, {
+                caption: `🔧 *CREATE PANEL*\n\nPilih paket yang diinginkan:`,
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: '📦 1GB User,idtele', callback_data: 'create_panel_1gb' },
+                            { text: '📦 2GB User,idtele', callback_data: 'create_panel_2gb' }
+                        ],
+                        [
+                            { text: '📦 3GB User,idtele', callback_data: 'create_panel_3gb' },
+                            { text: '📦 4GB User,idtele', callback_data: 'create_panel_4gb' }
+                        ],
+                        [
+                            { text: '📦 5GB User,idtele', callback_data: 'create_panel_5gb' },
+                            { text: '📦 6GB User,idtele', callback_data: 'create_panel_6gb' }
+                        ],
+                        [
+                            { text: '📦 7GB User,idtele', callback_data: 'create_panel_7gb' },
+                            { text: '📦 8GB User,idtele', callback_data: 'create_panel_8gb' }
+                        ],
+                        [
+                            { text: '📦 9GB User,idtele', callback_data: 'create_panel_9gb' },
+                            { text: '📦 10GB User,idtele', callback_data: 'create_panel_10gb' }
+                        ],
+                        [
+                            { text: '📦 Unli User,idtele', callback_data: 'create_panel_unli' }
+                        ],
+                        [
+                            { text: '👑 Create Admin User,idtele', callback_data: 'create_panel_admin' }
+                        ]
+                    ]
+                }
+            });
+            
+            logger.info(`[${userName} (${userId})] mengakses menu create panel`);
+        } catch (error) {
+            logger.error(`Create panel menu error: ${error.message}`);
+            await bot.sendMessage(chatId, '❌ Terjadi kesalahan saat menampilkan menu panel.');
+        }
     }
 };
 // Daftarkan handler command
@@ -516,6 +693,7 @@ bot.onText(/\/play(?: (.+))?/, commandHandlers.play);
 bot.onText(/\/ssweb(?: (.+))?/, commandHandlers.screenshot);
 bot.onText(/\/tiktok(?: (.+))?/, commandHandlers.tiktok);
 bot.onText(/\/hentai/, commandHandlers.hentai); // [FITUR BARU]
+bot.onText(/\/createpanel/, commandHandlers.createpanel); // [FITUR BARU] Create Panel
 // ======================== HANDLER CALLBACK ========================
 bot.on('callback_query', async (callbackQuery) => {
     const { message, data } = callbackQuery;
@@ -649,6 +827,44 @@ ${BOT_CONFIG.description}
                 parse_mode: 'Markdown'
             });
         }
+        else if (data === 'create_panel_menu') {
+            // Redirect ke menu create panel
+            const panelImage = await getWaifuImage();
+            await bot.sendPhoto(chatId, panelImage, {
+                caption: `🔧 *CREATE PANEL*\n\nPilih paket yang diinginkan:`,
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: '📦 1GB User,idtele', callback_data: 'create_panel_1gb' },
+                            { text: '📦 2GB User,idtele', callback_data: 'create_panel_2gb' }
+                        ],
+                        [
+                            { text: '📦 3GB User,idtele', callback_data: 'create_panel_3gb' },
+                            { text: '📦 4GB User,idtele', callback_data: 'create_panel_4gb' }
+                        ],
+                        [
+                            { text: '📦 5GB User,idtele', callback_data: 'create_panel_5gb' },
+                            { text: '📦 6GB User,idtele', callback_data: 'create_panel_6gb' }
+                        ],
+                        [
+                            { text: '📦 7GB User,idtele', callback_data: 'create_panel_7gb' },
+                            { text: '📦 8GB User,idtele', callback_data: 'create_panel_8gb' }
+                        ],
+                        [
+                            { text: '📦 9GB User,idtele', callback_data: 'create_panel_9gb' },
+                            { text: '📦 10GB User,idtele', callback_data: 'create_panel_10gb' }
+                        ],
+                        [
+                            { text: '📦 Unli User,idtele', callback_data: 'create_panel_unli' }
+                        ],
+                        [
+                            { text: '👑 Create Admin User,idtele', callback_data: 'create_panel_admin' }
+                        ]
+                    ]
+                }
+            });
+        }
         else if (data === 'admin_tools') {
             if (message.from.id.toString() !== ADMIN_ID) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
@@ -701,6 +917,88 @@ ${BOT_CONFIG.description}
                     parse_mode: 'Markdown'
                 }
             );
+        }
+        // [FITUR BARU] Handler callback untuk create panel
+        else if (data.startsWith('create_panel_')) {
+            const packageType = data.replace('create_panel_', '');
+            const userId = message.from.id;
+            const userName = message.from.first_name || 'User';
+            
+            // Mapping paket
+            const packageInfo = {
+                '1gb': { size: '1GB', quota: 1073741824, duration: 30 },
+                '2gb': { size: '2GB', quota: 2147483648, duration: 30 },
+                '3gb': { size: '3GB', quota: 3221225472, duration: 30 },
+                '4gb': { size: '4GB', quota: 4294967296, duration: 30 },
+                '5gb': { size: '5GB', quota: 5368709120, duration: 30 },
+                '6gb': { size: '6GB', quota: 6442450944, duration: 30 },
+                '7gb': { size: '7GB', quota: 7516192768, duration: 30 },
+                '8gb': { size: '8GB', quota: 8589934592, duration: 30 },
+                '9gb': { size: '9GB', quota: 9663676416, duration: 30 },
+                '10gb': { size: '10GB', quota: 10737418240, duration: 30 },
+                'unli': { size: 'Unlimited', quota: 0, duration: 30 },
+                'admin': { size: 'Admin', quota: 0, duration: 365 }
+            };
+            
+            const selectedPackage = packageInfo[packageType];
+            if (!selectedPackage) {
+                return bot.sendMessage(chatId, '❌ Paket tidak valid!');
+            }
+            
+            try {
+                // Simulasi pembuatan akun panel
+                const panelAccount = await createPanelAccount(selectedPackage, userId, userName);
+                
+                if (panelAccount.success) {
+                    const successMessage = `
+✅ *AKUN PANEL BERHASIL DIBUAT*
+
+👤 *Detail Akun:*
+• Username: \`${panelAccount.username}\`
+• Password: \`${panelAccount.password}\`
+• Paket: ${selectedPackage.size}
+• Durasi: ${selectedPackage.duration} hari
+• Status: Aktif
+
+🌐 *Panel Info:*
+• URL Panel: ${config.panel.url}
+• Port: ${config.panel.port}
+
+⚠️ *Penting:*
+• Simpan data login dengan baik
+• Jangan share akun ke orang lain
+• Hubungi admin jika ada masalah
+
+🔗 *Link Panel:* ${config.panel.url}:${config.panel.port}
+                    `.trim();
+                    
+                    await bot.sendMessage(chatId, successMessage, { 
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: '🌐 Buka Panel', url: `${config.panel.url}:${config.panel.port}` }
+                                ]
+                            ]
+                        }
+                    });
+                    
+                    // Notifikasi admin
+                    await notifyAdmin(`
+🆕 *AKUN PANEL BARU*
+👤 User: ${userName} (${userId})
+📦 Paket: ${selectedPackage.size}
+🔑 Username: ${panelAccount.username}
+                    `.trim());
+                    
+                    logger.info(`Panel account created: ${panelAccount.username} for user ${userId}`);
+                } else {
+                    await bot.sendMessage(chatId, `❌ Gagal membuat akun panel: ${panelAccount.error}`);
+                }
+            } catch (error) {
+                logger.error(`Create panel error: ${error.message}`);
+                await bot.sendMessage(chatId, '❌ Terjadi kesalahan saat membuat akun panel.');
+            }
         }
     } catch (error) {
         logger.error(`Callback error: ${error.message}`);
@@ -798,3 +1096,76 @@ bot.on("left_chat_member", async (msg) => {
         logger.info(`${memberName} keluar dari grup: ${chatTitle} (${chatId})`);
     }
 });
+
+
+// ======================== MANAJEMEN STATUS AI ========================
+const AI_STATUS_FILE = path.join(__dirname, 'ai_status.json');
+let aiEnabled = true; // Default AI aktif
+
+function loadAIStatus() {
+    if (fs.existsSync(AI_STATUS_FILE)) {
+        try {
+            const data = fs.readFileSync(AI_STATUS_FILE, 'utf8');
+            aiEnabled = JSON.parse(data).aiEnabled;
+            logger.info(`Status AI berhasil dimuat: ${aiEnabled ? 'Aktif' : 'Nonaktif'}`);
+        } catch (error) {
+            logger.error(`Error memuat status AI: ${error.message}`);
+        }
+    }
+}
+
+function saveAIStatus() {
+    try {
+        fs.writeFileSync(AI_STATUS_FILE, JSON.stringify({ aiEnabled }, null, 2), 'utf8');
+        logger.info(`Status AI berhasil disimpan: ${aiEnabled ? 'Aktif' : 'Nonaktif'}`);
+    } catch (error) {
+        logger.error(`Error menyimpan status AI: ${error.message}`);
+    }
+}
+
+// Panggil saat inisialisasi
+loadAIStatus();
+
+
+
+
+// ======================== HANDLER CALLBACK QUERY ========================
+bot.on("callback_query", async (query) => {
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+    const data = query.data;
+
+    switch (data) {
+        case "toggle_ai":
+            aiEnabled = !aiEnabled;
+            saveAIStatus();
+            await bot.answerCallbackQuery(query.id, `AI ${aiEnabled ? 'Diaktifkan' : 'Dinonaktifkan'}`);
+            // Update tombol di menu /bot
+            await bot.editMessageReplyMarkup({
+                inline_keyboard: [
+                    [
+                        { text: `AI: ${aiEnabled ? '✅ Aktif' : '❌ Nonaktif'}`, callback_data: 'toggle_ai' }
+                    ],
+                    [
+                        { text: '✨ Atur Kepribadian', callback_data: 'set_personality' },
+                        { text: '🔄 Reset Percakapan', callback_data: 'reset_conversation' }
+                    ],
+                    [
+                        { text: '📸 Screenshot Web', callback_data: 'screenshot_web' },
+                        { text: 'ℹ️ Info Bot', callback_data: 'bot_info' }
+                    ],
+                    [
+                        { text: '🖼️ Random Image', callback_data: 'random_image' },
+                        { text: '🔧 Create Panel', callback_data: 'create_panel_menu' }
+                    ]
+                ]
+            }, {
+                chat_id: chatId,
+                message_id: messageId
+            });
+            break;
+        // ... tambahkan case lain untuk callback_data yang sudah ada
+    }
+});
+
+

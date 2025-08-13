@@ -19,6 +19,15 @@ export default {
         aiKey: 'AIzaSyBmdFvEobyMBRttJhfBcKyL62YwxY5aHXY' // API Key Google Gemini AI
     },
     // ==========================
+    // 🔹 Panel API Settings
+    // ==========================
+    panel: {
+        url: 'https://panel.example.com', // URL panel utama
+        port: '8080', // Port panel
+        apiUrl: 'https://panel.example.com/api/users', // URL API untuk membuat user
+        apiKey: 'your_panel_api_key_here' // API Key untuk akses panel
+    },
+    // ==========================
     // 🔹 Bot General Settings
     // ==========================
     bot: {
@@ -97,8 +106,9 @@ export default {
         // --------------------------
         welcomeMessage: `
 ╭─⊷ 👋 Selamat Datang {name}!
-│ Aku 𓆩۞𓆪𝐑𝐢𝐳𝐤𝐲-𝐀𝐢𓆩۞𓆪 — bot AI powered by Google Gemini 🤖  
-│ Siap nemenin kamu kapan aja! 😄  
+│Aku 𓆩۞𓆪𝐑𝐢𝐳𝐤𝐲-𝐀𝐢𓆩۞𓆪
+│bot AI powered by Google Gemini 🤖  
+│Siap nemenin kamu kapan aja! 😄  
 │
 │ ✨ Fitur Utama:
 │ ├ Chat AI pintar  
@@ -122,7 +132,8 @@ export default {
 ├ /bot – Menu fitur  
 ├ /clear – Reset percakapan  
 ├ /ssweb [url] – Screenshot web  
-└ /tiktok [link] – Download TikTok
+├ /tiktok [link] – Download TikTok
+└ /createpanel – Buat akun panel
 
 🔹 Fitur AI:
 ├ Chat pintar  
@@ -134,11 +145,15 @@ export default {
 ├ /pin [judul] – Gambar Pinterest  
 └ /play [judul] – Musik YouTube
 
+🔹 Panel:
+└ /createpanel – Membuat akun panel dengan berbagai paket
+
 🔹 Contoh:
 • /pin anime girl  
 • /play lofi chill  
 • /ssweb https://example.com  
 • /tiktok https://vm.tiktok.com/xxxxx
+• /createpanel
 ╰────────────────╯`,
         // --------------------------
         // ⚠️ Error Messages
@@ -147,15 +162,16 @@ export default {
             general: "⚠️ Terjadi kesalahan sistem. Silakan coba lagi nanti.",
             adminOnly: "⛔ Perintah ini hanya untuk admin!",
             invalidQuery: "❌ Format query tidak valid. Contoh: `/pin sunset pantai`",
-            apiFailure: "🔌 Gangguan koneksi ke layanan eksternal"
+            apiFailure: "🔌 Gangguan koneksi ke layanan eksternal",
+            aiDisabled: "Maaf, AI sedang dinonaktifkan. Silakan aktifkan kembali untuk melanjutkan percakapan."
         },
         // --------------------------
         // 👥 Group Messages
         // --------------------------
-        groupMessages: {
-            botAddedMessage: "Halo semua! Terima kasih sudah menambahkan saya ke grup ini. Saya siap membantu!",
-            welcomeMessage: "👋 Selamat datang, {name}, di grup {groupName}! Senang Anda bergabung.",
-            farewellMessage: "👋 Sampai jumpa, {name}. Kami akan merindukanmu di {groupName}."
-        }
+    groupMessages: {
+    botAddedMessage: "🤖 Halo semua! Terima kasih sudah mengundang saya ke grup ini 🎉 Tenang... saya cuma bot, nggak bakal minta traktir kopi kok ☕😆 Siap membantu 24/7 tanpa lembur!", // Pesan saat bot ditambahkan ke grup
+    welcomeMessage: "👋 Selamat datang, {name}! Selamat bergabung di 👑𝐑𝐈𝐙𝐊𝐘 𝐀𝐏𝐏 𝐒𝐓𝐎𝐑𝐄👑 🚀 Anggap aja ini rumah sendiri... tapi jangan bawa kulkas pulang ya 😜", // Pesan sambutan anggota baru
+    farewellMessage: "👋 Sampai jumpa, {name}... Kami akan merindukanmu di 👑𝐑𝐈𝐙𝐊𝐘 𝐀𝐏𝐏 𝐒𝐓𝐎𝐑𝐄👑 Ingat... pintu selalu terbuka, tapi jendela jangan dibuka, nanti nyamuk masuk 🦟😂" // Pesan perpisahan anggota keluar
+       }
     }
 };
