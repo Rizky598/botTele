@@ -2,6 +2,8 @@ import TelegramBot from 'node-telegram-bot-api';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
+import chalk from 'chalk';
+import os from 'os';
 import winston from 'winston';
 import { fileURLToPath } from 'url';
 import moment from 'moment';
@@ -31,8 +33,8 @@ const USER_CACHE_FILE = path.join(__dirname, 'user_cache.json');
 let userCache = new Set();
 // Konfigurasi dari file
 const { token: TELEGRAM_TOKEN, adminId: ADMIN_ID } = config.telegram;
-const GOOGLE_AI_API_KEY = config.google.aiKey;
-const GOOGLE_AI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent";
+
+const VREDEN_AI_API_URL = "https://api.vreden.my.id/api/mora";
 const BOT_CONFIG = config.bot;
 // Inisialisasi bot
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
@@ -109,7 +111,7 @@ function getRelevantConversationContext(chatId, maxTokens = 900) {
     return relevantMessages;
 }
 // ======================== FUNGSI AI ========================
-async function getAIResponse(chatId, message) {
+async function getAIResponse(chatId, message, username = 'Pengguna') {
     if (!aiEnabled) {
         return BOT_CONFIG.errorMessages.aiDisabled;
     }
@@ -135,17 +137,12 @@ async function getAIResponse(chatId, message) {
         timestamp: Date.now() 
     }); 
     try {
-        const relevantMessages = getRelevantConversationContext(chatId);
-        const formattedMessages = relevantMessages.map(msg => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.content }]
-        }));     
-        const response = await axios.post(
-            `${GOOGLE_AI_API_URL}?key=${GOOGLE_AI_API_KEY}`,
-            { contents: formattedMessages },
-            { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+
+        const response = await axios.get(
+            `${VREDEN_AI_API_URL}?query=${encodeURIComponent(message)}&username=${chatId}`,
+            { timeout: 30000 }
         );     
-        const aiResponse = response.data.candidates[0].content.parts[0].text;
+        const aiResponse = response.data.result;
         // Tambahkan respon AI
         conversationHistory[chatId].push({ 
             role: 'assistant', 
@@ -421,6 +418,82 @@ const commandHandlers = {
             await bot.sendMessage(chatId, BOT_CONFIG.errorMessages.apiFailure);
         }
     },
+    ig: async (msg, match) => {
+        const chatId = msg.chat.id;
+        const url = match[1];
+        if (!url) {
+            return bot.sendMessage(chatId, `❌ Mohon berikan URL Instagram setelah perintah /ig. Contoh: /ig https://www.instagram.com/reel/DNdEFAKJFWY/`);
+        }
+
+        try {
+            await bot.sendChatAction(chatId, 'upload_video');
+            const apiUrl = `https://api.vreden.my.id/api/download/instagram2?url=${encodeURIComponent(url)}`;
+            const response = await axios.get(apiUrl, { timeout: 30000 });
+            const result = response.data.result;
+
+            if (result && result.media && result.media.length > 0) {
+                const videoMedia = result.media.find(m => m.type === 'video');
+                const imageMedia = result.media.find(m => m.type === 'image');
+
+                if (videoMedia) {
+                    await bot.sendVideo(chatId, videoMedia.url, {
+                        caption: `✅ Video berhasil diunduh dari Instagram!\nJudul: ${result.title || 'Tidak ada judul'}`,
+                        parse_mode: 'Markdown'
+                    });
+                } else if (imageMedia) {
+                    await bot.sendPhoto(chatId, imageMedia.url, {
+                        caption: `✅ Gambar berhasil diunduh dari Instagram!\nJudul: ${result.title || 'Tidak ada judul'}`,
+                        parse_mode: 'Markdown'
+                    });
+                } else {
+                    await bot.sendMessage(chatId, `❌ Tidak ditemukan media video atau gambar yang dapat diunduh dari URL tersebut.`);
+                }
+            } else {
+                await bot.sendMessage(chatId, `❌ Gagal mengunduh media dari Instagram. Pastikan URL valid dan publik.`);
+            }
+        } catch (error) {
+            logger.error(`Instagram downloader error: ${error.message}`);
+            let errorMessage = BOT_CONFIG.errorMessages.apiFailure;
+            if (error.response && error.response.status === 404) {
+                errorMessage = `❌ Media tidak ditemukan atau URL tidak valid.`;
+            } else if (error.code === 'ECONNABORTED') {
+                errorMessage = `❌ Permintaan ke API Instagram timeout. Coba lagi nanti.`;
+            }
+            await bot.sendMessage(chatId, errorMessage);
+        }
+    },
+    yt: async (msg, match) => {
+        const chatId = msg.chat.id;
+        const url = match[1];
+        if (!url) {
+            return bot.sendMessage(chatId, `❌ Mohon berikan URL YouTube setelah perintah /yt. Contoh: /yt https://youtube.com/watch?v=KHgllosZ3kA`);
+        }
+
+        try {
+            await bot.sendChatAction(chatId, 'upload_video');
+            const apiUrl = `https://api.vreden.my.id/api/ytmp4?url=${encodeURIComponent(url)}`;
+            const response = await axios.get(apiUrl, { timeout: 60000 }); // Increased timeout for video downloads
+            const result = response.data.result;
+
+            if (result && result.download && result.download.url) {
+                await bot.sendVideo(chatId, result.download.url, {
+                    caption: `✅ Video YouTube berhasil diunduh!\nJudul: ${result.metadata.title || 'Tidak ada judul'}\nDurasi: ${result.metadata.duration.timestamp || 'N/A'}`,
+                    parse_mode: 'Markdown'
+                });
+            } else {
+                await bot.sendMessage(chatId, `❌ Gagal mengunduh video YouTube. Pastikan URL valid.`);
+            }
+        } catch (error) {
+            logger.error(`YouTube downloader error: ${error.message}`);
+            let errorMessage = BOT_CONFIG.errorMessages.apiFailure;
+            if (error.response && error.response.status === 404) {
+                errorMessage = `❌ Video tidak ditemukan atau URL tidak valid.`;
+            } else if (error.code === 'ECONNABORTED') {
+                errorMessage = `❌ Permintaan ke API YouTube timeout. Coba lagi nanti.`;
+            }
+            await bot.sendMessage(chatId, errorMessage);
+        }
+    },
     bot: async (msg) => {
         const chatId = msg.chat.id;
         const randomImage = await getWaifuImage();
@@ -687,7 +760,9 @@ bot.onText(/\/start/, commandHandlers.start);
 bot.onText(/\/help/, commandHandlers.help);
 bot.onText(/\/stats/, commandHandlers.stats);
 bot.onText(/\/clear/, commandHandlers.clear);
-bot.onText(/\/pin(?: (.+))?/, commandHandlers.pin);
+bot.onText(/\/pin\s*(.*)/, commandHandlers.pin);
+bot.onText(/\/ig\s*(.*)/, commandHandlers.ig);
+bot.onText(/\/yt\s*(.*)/, commandHandlers.yt);
 bot.onText(/\/bot/, commandHandlers.bot);
 bot.onText(/\/play(?: (.+))?/, commandHandlers.play);
 bot.onText(/\/ssweb(?: (.+))?/, commandHandlers.screenshot);
@@ -774,18 +849,23 @@ ${BOT_CONFIG.description}
 
 ⚙️ *Spesifikasi:*
 • Versi: ${BOT_CONFIG.version}
-• Pembaruan terakhir: ${BOT_CONFIG.lastUpdate}
+• Update: ${BOT_CONFIG.lastUpdate}
 • Memori: ${Object.keys(conversationHistory).length} percakapan
 • Pengguna: ${userCache.size} orang
 
 🔧 *Fitur Utama:*
-- Obrolan cerdas dengan AI Google Gemini
-- Pencarian gambar Pinterest
-- Download musik YouTube
+- Chat AI by Mora
+- Gambar Pinterest (/pin)
+- Musik YouTube (/play)
+- Video TikTok (/tiktok)
+- Video Instagram (/ig)
+- Video YouTube (/yt)
+- Screenshot Web (/ssweb)
+- Buat Akun Panel (/createpanel)
 - Multiple personalities
-- Screenshot website
-- Video hentai (Premium/Owner)
-            `.trim();
+- Ingat obrolan 🧠
+- /hentai 🔞 (dewasa)
+`.trim();
             await bot.sendMessage(chatId, infoMessage, { parse_mode: 'Markdown' });
         }
         else if (data.startsWith('download_mp3_')) {
@@ -934,7 +1014,7 @@ ${BOT_CONFIG.description}
                 '6gb': { size: '6GB', quota: 6442450944, duration: 30 },
                 '7gb': { size: '7GB', quota: 7516192768, duration: 30 },
                 '8gb': { size: '8GB', quota: 8589934592, duration: 30 },
-                '9gb': { size: '9GB', quota: 9663676416, duration: 30 },
+                '9gb': { size: '9GB', quota: 7693829809, duration: 30 },
                 '10gb': { size: '10GB', quota: 10737418240, duration: 30 },
                 'unli': { size: 'Unlimited', quota: 0, duration: 30 },
                 'admin': { size: 'Admin', quota: 0, duration: 365 }
@@ -1030,11 +1110,18 @@ process.on('SIGTERM', gracefulShutdown);
         loadUserCache();
         // Verifikasi koneksi bot
         const botInfo = await bot.getMe();
-        logger.info(`
+        logger.info(chalk.green.bold(`
+
 🚀 Bot berhasil dijalankan!
-🤖 ${botInfo.first_name} (@${botInfo.username})
-📆 ${new Date().toLocaleString()}
-        `.trim());
+`));
+        logger.info(chalk.cyan(`🤖 Nama Bot: ${botInfo.first_name}`));
+        logger.info(chalk.cyan(`🔗 Username: @${botInfo.username}`));
+        logger.info(chalk.magenta(`📆 Waktu Mulai: ${new Date().toLocaleString()}`));
+        logger.info(chalk.yellow(`💻 Platform: ${os.platform()} ${os.release()}`));
+        logger.info(chalk.yellow(`🟢 Node.js Version: ${process.version}`));
+        logger.info(chalk.green.bold(`
+Bot siap melayani!
+`));
         await notifyAdmin(`🚀 Bot aktif! ${botInfo.first_name} siap melayani`);
         // Backup otomatis setiap 24 jam
         setInterval(() => {
@@ -1167,5 +1254,3 @@ bot.on("callback_query", async (query) => {
         // ... tambahkan case lain untuk callback_data yang sudah ada
     }
 });
-
-

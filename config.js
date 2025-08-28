@@ -16,25 +16,25 @@ export default {
     // 🔹 Google AI API Settings
     // ==========================
     google: {
-        aiKey: 'AIzaSyBmdFvEobyMBRttJhfBcKyL62YwxY5aHXY' // API Key Google Gemini AI
+
     },
     // ==========================
     // 🔹 Panel API Settings
     // ==========================
     panel: {
-        url: 'https://panel.example.com', // URL panel utama
+        url: 'https://izalbosmuda.lexzy.my.id', // URL panel utama
         port: '8080', // Port panel
-        apiUrl: 'https://panel.example.com/api/users', // URL API untuk membuat user
-        apiKey: 'your_panel_api_key_here' // API Key untuk akses panel
+        apiUrl: 'https://izalbosmuda.lexzy.my.id/api/application/users', // URL API untuk membuat user
+        apiKey: 'ptlc_x7JHs71TYNDfSox3McODSEPHRceofC2g0G9VQmBsJWr' // API Key untuk akses panel
     },
     // ==========================
     // 🔹 Bot General Settings
     // ==========================
     bot: {
-        name: "Gemini AI Bot", // Nama bot
-        version: "3.0.0", // Versi bot
-        description: "Bot Telegram yang menggunakan Google Gemini AI untuk berinteraksi",
-        lastUpdate: "2024-06-15", // Tanggal update terakhir
+    name: "Rizky-AI Bot", // Nama bot
+    version: "4.0", // Versi bot
+    description: "Bot Telegram yang menggunakan Mora AI untuk berinteraksi",
+    lastUpdate: "2025-08-21", // Tanggal update terakhir
         // --------------------------
         // 🎭 Personality System
         // --------------------------
@@ -105,24 +105,25 @@ export default {
         // 💬 Default Messages
         // --------------------------
         welcomeMessage: `
-╭─⊷ 👋 Selamat Datang {name}!
+╭─⊷ 👋 Halo {name}!
 │Aku 𓆩۞𓆪𝐑𝐢𝐳𝐤𝐲-𝐀𝐢𓆩۞𓆪
-│bot AI powered by Google Gemini 🤖  
-│Siap nemenin kamu kapan aja! 😄  
+│Bot AI by Mora 🤖
+│Siap bantu kamu!  
 │
-│ ✨ Fitur Utama:
-│ ├ Chat AI pintar  
-│ ├ Gambar dari Pinterest  
-│ ├ Download musik YouTube  
-│ ├ Download video TikTok tanpa WM  
-│ ├ Screenshot website  
-│ ├ Kepribadian fleksibel  
-│ ├ Ingat obrolan kamu 🧠  
-│ └ /hentai 🔞 (fitur dewasa)
+│ ✨ Fitur:
+│ • Chat AI pintar  
+│ • Gambar Pinterest (/pin)  
+│ • Musik YouTube (/play)  
+│ • Video TikTok (/tiktok)  
+│ • Video Instagram (/ig)  
+│ • Video YouTube (/yt)  
+│ • Screenshot Web (/ssweb)  
+│ • Buat Akun Panel (/createpanel)  
+│ • Ingat Obrolan 🧠  
+│ • /hentai 🔞 (dewasa)  
 │
-│ 🚀 Kirim pesan untuk mulai ngobrol  
-│ 📌 /bot untuk menu fitur  
-│ 📖 /help untuk info lainnya
+│ 🚀 Mulai chat sekarang!  
+│ 📌 /bot = Menu | /help = Bantuan  
 ╰─⊷`,
         helpMessage: `
 ╭─🤖 BOT HELP CENTER ─╮
@@ -133,6 +134,8 @@ export default {
 ├ /clear – Reset percakapan  
 ├ /ssweb [url] – Screenshot web  
 ├ /tiktok [link] – Download TikTok
+├ /ig [link] – Download Instagram
+├ /yt  [link] – Download YouTube
 └ /createpanel – Buat akun panel
 
 🔹 Fitur AI:
@@ -169,9 +172,9 @@ export default {
         // 👥 Group Messages
         // --------------------------
     groupMessages: {
-    botAddedMessage: "🤖 Halo semua! Terima kasih sudah mengundang saya ke grup ini 🎉 Tenang... saya cuma bot, nggak bakal minta traktir kopi kok ☕😆 Siap membantu 24/7 tanpa lembur!", // Pesan saat bot ditambahkan ke grup
-    welcomeMessage: "👋 Selamat datang, {name}! Selamat bergabung di 👑𝐑𝐈𝐙𝐊𝐘 𝐀𝐏𝐏 𝐒𝐓𝐎𝐑𝐄👑 🚀 Anggap aja ini rumah sendiri... tapi jangan bawa kulkas pulang ya 😜", // Pesan sambutan anggota baru
-    farewellMessage: "👋 Sampai jumpa, {name}... Kami akan merindukanmu di 👑𝐑𝐈𝐙𝐊𝐘 𝐀𝐏𝐏 𝐒𝐓𝐎𝐑𝐄👑 Ingat... pintu selalu terbuka, tapi jendela jangan dibuka, nanti nyamuk masuk 🦟😂" // Pesan perpisahan anggota keluar
+    botAddedMessage: "🤖 Halo semua! Terima kasih sudah mengundang saya ke grup ini 🎉 Tenang saya cuma bot, nggak bakal minta traktir kopi kok ☕😆 Siap membantu 24/7 tanpa lembur!", // Pesan saat bot ditambahkan ke grup
+    welcomeMessage: "👋 Selamat datang, {name}! Selamat bergabung di 👑𝐑𝐈𝐙𝐊𝐘 𝐀𝐏𝐏 𝐒𝐓𝐎𝐑𝐄👑 Anggap aja ini rumah sendiri... tapi jangan bawa kulkas pulang ya 😜", // Pesan sambutan anggota baru
+    farewellMessage: "👋 Sampai jumpa, {name}! Kami akan merindukanmu di 👑𝐑𝐈𝐙𝐊𝐘 𝐀𝐏𝐏 𝐒𝐓𝐎𝐑𝐄👑 Ingat pintu selalu terbuka, tapi jendela jangan dibuka, nanti nyamuk masuk 🦟😂" // Pesan perpisahan anggota keluar
        }
     }
 };

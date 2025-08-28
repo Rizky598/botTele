@@ -1,6 +1,6 @@
 {
   "name": "telegram-ai-bot",
-  "version": "3.0.0",
+  "version": "4.0",
   "description": "Bot Telegram AI canggih dengan sistem memori percakapan, multi-kepribadian, dan fitur multimedia",
   "main": "bot.js",
   "scripts": {
